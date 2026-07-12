@@ -1,359 +1,873 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>シングルプレイ - Minecraft Web Edition</title>
-    <!-- ピクセルフォント -->
-    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=VT323&display=swap" rel="stylesheet">
-    
-    <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            /* 土ブロック風の背景 */
-            background-color: #79553a;
-            background-image: 
-                repeating-linear-gradient(45deg, #6c4b33 25%, transparent 25%, transparent 75%, #6c4b33 75%, #6c4b33), 
-                repeating-linear-gradient(45deg, #6c4b33 25%, #79553a 25%, #79553a 75%, #6c4b33 75%, #6c4b33);
-            background-position: 0 0, 10px 10px;
-            background-size: 20px 20px;
-            font-family: 'DotGothic16', sans-serif;
-            color: white;
-            user-select: none;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
+<meta charset="UTF-8">
+<title>Minecraft</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; background:#000; height:100%; width:100%; font-family: -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", sans-serif; }
+  canvas { display:block; }
+  #crosshair {
+    position:fixed; top:50%; left:50%; width:20px; height:20px; margin:-10px 0 0 -10px;
+    pointer-events:none; z-index:10;
+  }
+  #crosshair::before, #crosshair::after {
+    content:""; position:absolute; background:rgba(255,255,255,0.85);
+  }
+  #crosshair::before { left:9px; top:0; width:2px; height:20px; }
+  #crosshair::after { top:9px; left:0; width:20px; height:2px; }
 
-        .screen {
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.6);
-            padding-top: 50px;
-        }
+  #hotbar {
+    position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+    display:flex; gap:6px; z-index:10; background:rgba(0,0,0,0.45); padding:6px; border-radius:8px;
+  }
+  .slot {
+    width:48px; height:48px; border-radius:6px; border:2px solid rgba(255,255,255,0.25);
+    display:flex; align-items:center; justify-content:center; position:relative;
+    box-sizing:border-box; background-size: cover !important; image-rendering: pixelated; image-rendering: crisp-edges;
+  }
+  .slot.active { border-color:#fff; box-shadow:0 0 8px rgba(255,255,255,0.6); }
+  .slot span { position:absolute; bottom:2px; right:4px; font-size:10px; color:#fff; opacity:0.9; text-shadow:1px 1px 1px #000; }
 
-        .active {
-            display: flex;
-        }
+  #hud {
+    position:fixed; top:14px; left:14px; color:#fff; font-size:13px; z-index:10;
+    text-shadow:0 1px 3px rgba(0,0,0,0.8); line-height:1.6; user-select:none;
+  }
 
-        h2 {
-            text-shadow: 2px 2px 0px #000;
-            margin-bottom: 20px;
-            font-size: 24px;
-        }
+  #onlineList {
+    position:fixed; top:14px; right:14px; z-index:10; color:#fff; font-size:13px;
+    text-shadow:0 1px 3px rgba(0,0,0,0.8); text-align:right; user-select:none;
+  }
+  .onlineTitle { opacity:0.75; font-size:11px; margin-bottom:4px; }
+  .onlineRow { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin:2px 0; }
+  .onlineDot { width:9px; height:9px; border-radius:50%; display:inline-block; flex-shrink:0; }
 
-        .menu-container {
-            width: 500px;
-            max-width: 90%;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
+  #startScreen {
+    position:fixed; inset:0; background:linear-gradient(#87ceeb,#c9e8f5);
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    z-index:100; color:#20303d; text-align:center; font-family:inherit;
+  }
+  #startScreen h1 { font-size:42px; margin:0 0 8px; letter-spacing:1px; }
+  #startScreen p { font-size:15px; margin:4px 0; color:#3a4a55; }
+  #nameInput {
+    margin-top:20px; padding:12px 16px; font-size:16px; border-radius:8px; border:2px solid rgba(61,90,74,0.5);
+    width:240px; text-align:center; outline:none; background:rgba(255,255,255,0.9); color:#20303d;
+  }
+  #nameInput:focus { border-color:#3d7a3d; }
+  #nameError {
+    color:#a8321f; font-size:13px; margin-top:8px; height:16px; visibility:hidden;
+  }
+  #nameError.show { visibility:visible; }
+  #startBtn {
+    margin-top:10px; padding:14px 36px; font-size:16px; border:none; border-radius:8px;
+    background:#3d7a3d; color:#fff; cursor:pointer; box-shadow:0 3px 0 #2a552a;
+  }
+  #startBtn:active { transform:translateY(2px); box-shadow:0 1px 0 #2a552a; }
+  #controlsBox {
+    margin-top:26px; background:rgba(255,255,255,0.5); padding:14px 22px; border-radius:10px;
+    font-size:13px; text-align:left;
+  }
+  #controlsBox div { margin:3px 0; }
+  #controlsBox b { display:inline-block; width:120px; }
 
-        .row {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            width: 100%;
-        }
-
-        button {
-            background-color: #c6c6c6;
-            border: 2px solid #000;
-            border-top-color: #fff;
-            border-left-color: #fff;
-            border-bottom-color: #555;
-            border-right-color: #555;
-            color: #333;
-            font-family: 'DotGothic16', sans-serif;
-            font-size: 18px;
-            padding: 10px;
-            width: 100%;
-            cursor: pointer;
-            text-shadow: 1px 1px 0px #fff;
-            transition: 0.1s;
-        }
-
-        button:hover {
-            background-color: #a0a0ff;
-            color: #fff;
-            text-shadow: 1px 1px 0px #3f3f3f;
-            border-top-color: #d6d6ff;
-            border-left-color: #d6d6ff;
-            border-bottom-color: #5555aa;
-            border-right-color: #5555aa;
-        }
-
-        button:disabled {
-            background-color: #555;
-            color: #888;
-            text-shadow: none;
-            cursor: not-allowed;
-            border-color: #333;
-        }
-
-        .half-btn {
-            width: 48%;
-        }
-
-        /* ワールドリストのスタイル */
-        .world-list-container {
-            width: 500px;
-            height: 300px;
-            background: rgba(0, 0, 0, 0.5);
-            border: 2px solid #000;
-            overflow-y: auto;
-            margin-bottom: 20px;
-            padding: 10px;
-            box-sizing: border-box;
-        }
-
-        .world-item {
-            border: 2px solid #555;
-            padding: 10px;
-            margin-bottom: 10px;
-            cursor: pointer;
-            background: rgba(255, 255, 255, 0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .world-item:hover {
-            border-color: #fff;
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .world-info {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .world-name {
-            font-size: 20px;
-            color: #ffff55;
-            text-shadow: 2px 2px 0px #000;
-        }
-
-        .world-mode {
-            font-size: 14px;
-            color: #aaa;
-        }
-
-        .delete-btn {
-            width: 60px;
-            padding: 5px;
-            font-size: 14px;
-            background-color: #aa0000;
-            color: white;
-            text-shadow: none;
-        }
-        .delete-btn:hover {
-            background-color: #ff5555;
-        }
-
-        /* 入力フォーム */
-        .input-group {
-            margin-bottom: 20px;
-            width: 500px;
-        }
-
-        input[type="text"] {
-            width: 100%;
-            padding: 10px;
-            background: #000;
-            color: #fff;
-            border: 2px solid #a0a0a0;
-            font-family: 'DotGothic16', sans-serif;
-            font-size: 18px;
-            box-sizing: border-box;
-        }
-        
-        .limit-text {
-            color: #ff5555;
-            text-align: center;
-            margin-bottom: 10px;
-            text-shadow: 1px 1px 0px #000;
-        }
-    </style>
+  #paused {
+    position:fixed; inset:0; background:rgba(0,0,0,0.45); display:none;
+    align-items:center; justify-content:center; z-index:90; color:#fff; font-size:20px;
+  }
+</style>
 </head>
 <body>
 
-    <!-- ワールド選択画面 -->
-    <div id="select-screen" class="screen active">
-        <h2>ワールドを選択</h2>
-        
-        <div class="world-list-container" id="world-list">
-            <!-- ここにJSでワールドが追加されます -->
-        </div>
+<div id="startScreen">
+  <h1>Minecraft</h1>
+  <p>マルチ対応バージョン</p>
+  <input id="nameInput" type="text" maxlength="10" placeholder="名前を入力(10文字まで)" autocomplete="off">
+  <div id="nameError">名前を入力してください</div>
+  <button id="startBtn">プレイ開始</button>
+  <div id="controlsBox">
+    <div><b>ルール1</b>荒らしをしないでください。</div>
+    <div><b>ルール2</b>いじめをしないでください</div>
+    <div><b>ルール3</b>マップを遊べなくするほど破壊しないでください</div>
+    <div><b>ルール4</b> 楽しく遊びましょう</div>
+    <div><b>ルール5</b> 人を殴りません</div>
+    <div><b>ルール6</b> 違反はすべて許しません</div>
+  </div>
+</div>
 
-        <div id="limit-warning" class="limit-text" style="display: none;">
-            ワールドは最大3個までです。新しく作る場合はどれかを削除してください。
-        </div>
+<div id="crosshair"></div>
+<div id="hotbar"></div>
+<div id="hud"></div>
+<div id="onlineList"></div>
 
-        <div class="menu-container">
-            <button id="btn-create-new" onclick="showCreateScreen()">ワールド新規作成</button>
-            <button onclick="window.location.href='index.html'" style="margin-top: 10px;">タイトル画面へ戻る</button>
-        </div>
-    </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.15.0/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.15.0/firebase-database-compat.min.js"></script>
+<script>
+(function(){
 
-    <!-- ワールド新規作成画面 -->
-    <div id="create-screen" class="screen">
-        <h2>ワールド新規作成</h2>
-        
-        <div class="input-group">
-            <label style="display:block; margin-bottom:5px; text-shadow:2px 2px 0px #000;">ワールド名</label>
-            <input type="text" id="new-world-name" value="新規ワールド">
-        </div>
+// ---------- Config ----------
+const W = 48;          // world width/depth
+const H = 34;          // world height
+const WATER_LEVEL = 12;
+const CHUNK_SEED = 20260711;
 
-        <div class="menu-container">
-            <!-- モード切替ボタン -->
-            <button id="btn-toggle-mode" onclick="toggleMode()" style="margin-bottom: 20px;">ゲームモード: サバイバル</button>
-            
-            <div class="row">
-                <button class="half-btn" onclick="createNewWorld()">ワールド作成</button>
-                <button class="half-btn" onclick="showSelectScreen()">キャンセル</button>
-            </div>
-        </div>
-    </div>
+// Block types
+const AIR=0, GRASS=1, DIRT=2, STONE=3, SAND=4, WATER=5, WOOD=6, LEAVES=7, SNOW=8, TORCH=9;
+const GRASS_TOP = 99; 
 
-    <script>
-        // --- データ管理 ---
-        const MAX_WORLDS = 3;
-        let worlds = [];
-        let currentSelectedMode = 'survival'; // 'survival' か 'creative'
+const BLOCK_NAMES = {};
+BLOCK_NAMES[GRASS]="草ブロック"; BLOCK_NAMES[DIRT]="土"; BLOCK_NAMES[STONE]="石";
+BLOCK_NAMES[SAND]="砂"; BLOCK_NAMES[WOOD]="木材"; BLOCK_NAMES[LEAVES]="葉"; 
+BLOCK_NAMES[SNOW]="雪"; BLOCK_NAMES[TORCH]="松明";
 
-        // 初期読み込み
-        window.onload = () => {
-            loadWorlds();
-            renderWorldList();
-        };
+const HOTBAR_BLOCKS = [GRASS, DIRT, STONE, SAND, WOOD, LEAVES, SNOW, TORCH];
 
-        // ローカルストレージからワールドデータを読み込む
-        function loadWorlds() {
-            const savedData = localStorage.getItem('mc_worlds');
-            if (savedData) {
-                worlds = JSON.parse(savedData);
+// ホットバー用のテクスチャパス指定 (草ブロックは指定通り「grass.png」を使用)
+const BLOCK_TEXTURES = {};
+BLOCK_TEXTURES[GRASS] = 'grass.png';
+BLOCK_TEXTURES[DIRT]  = 'dirt.png';
+BLOCK_TEXTURES[STONE] = 'stone.png';
+BLOCK_TEXTURES[SAND]  = 'sand.png';
+BLOCK_TEXTURES[WOOD]  = 'wood.png';
+BLOCK_TEXTURES[LEAVES]= 'leaves.png';
+BLOCK_TEXTURES[SNOW]  = 'snow.png';
+
+const BASE_COLOR = {};
+BASE_COLOR[GRASS] = [1,1,1]; BASE_COLOR[GRASS_TOP] = [1,1,1];
+BASE_COLOR[DIRT]  = [1,1,1]; BASE_COLOR[STONE] = [1,1,1]; BASE_COLOR[SAND]  = [1,1,1];
+BASE_COLOR[WOOD]  = [1,1,1]; BASE_COLOR[LEAVES]= [1,1,1]; BASE_COLOR[SNOW]  = [1,1,1];
+BASE_COLOR[WATER] = [0.20,0.42,0.62]; BASE_COLOR[TORCH] = [1,1,1];
+
+// ---------- Synced Time System Variables ----------
+// 昼（4:00〜20:00 = 16時間分）に10分（600秒）、夜（20:00〜翌4:00 = 8時間分）に7分（420秒）
+let gameTime = 8.0; 
+const DAY_REAL_DURATION = 600;  // 10分
+const NIGHT_REAL_DURATION = 420; // 7分
+const TOTAL_CYCLE_DURATION = DAY_REAL_DURATION + NIGHT_REAL_DURATION;
+
+// ---------- Generated Torch Texture ----------
+let torchCanvasDataUrl = "";
+function generateTorchTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 16; canvas.height = 16;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 16, 16);
+  
+  // 木の持ち手部分
+  ctx.fillStyle = '#5c4033'; ctx.fillRect(7, 6, 2, 10);
+  ctx.fillStyle = '#3d2b22'; ctx.fillRect(7, 10, 1, 6);
+  // 炭化の頭
+  ctx.fillStyle = '#222222'; ctx.fillRect(6, 4, 4, 2);
+  // 炎の中心
+  ctx.fillStyle = '#ffffa0'; ctx.fillRect(7, 1, 2, 3);
+  // 炎の外側
+  ctx.fillStyle = '#ff6600';
+  ctx.fillRect(6, 2, 1, 2); ctx.fillRect(9, 2, 1, 2); ctx.fillRect(7, 0, 2, 1);
+  ctx.fillStyle = '#ff3300'; ctx.fillRect(6, 3, 1, 1); ctx.fillRect(9, 3, 1, 1);
+
+  torchCanvasDataUrl = canvas.toDataURL(); // インベントリ表示用
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  return texture;
+}
+const torchTexture = generateTorchTexture();
+
+// ---------- Texture Loader & Materials Setup ----------
+const textureLoader = new THREE.TextureLoader();
+
+function createBlockMaterial(url) {
+  const tex = textureLoader.load(url);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  return new THREE.MeshLambertMaterial({ vertexColors: true, map: tex });
+}
+
+const opMaterialsMap = {};
+opMaterialsMap[GRASS]     = createBlockMaterial('grass.png');
+opMaterialsMap[GRASS_TOP] = createBlockMaterial('grass_top.png');
+opMaterialsMap[DIRT]      = createBlockMaterial('dirt.png');
+opMaterialsMap[STONE]     = createBlockMaterial('stone.png');
+opMaterialsMap[SAND]      = createBlockMaterial('sand.png');
+opMaterialsMap[WOOD]      = createBlockMaterial('wood.png');
+opMaterialsMap[LEAVES]    = createBlockMaterial('leaves.png');
+opMaterialsMap[SNOW]      = createBlockMaterial('snow.png');
+
+opMaterialsMap[TORCH]     = new THREE.MeshLambertMaterial({ 
+  vertexColors: true, 
+  map: torchTexture, 
+  transparent: true, 
+  alphaTest: 0.1,
+  emissive: new THREE.Color(0x663c11)
+});
+
+const OPAQUE_RENDER_TYPES = [GRASS, GRASS_TOP, DIRT, STONE, SAND, WOOD, LEAVES, SNOW, TORCH];
+const opMaterialsArray = OPAQUE_RENDER_TYPES.map(type => opMaterialsMap[type]);
+const opMaterialIndexMap = {};
+OPAQUE_RENDER_TYPES.forEach((type, index) => { opMaterialIndexMap[type] = index; });
+
+const waterTexture = textureLoader.load('water.png');
+waterTexture.magFilter = THREE.NearestFilter; waterTexture.minFilter = THREE.NearestFilter;
+const wMat = new THREE.MeshLambertMaterial({ 
+  vertexColors: true, map: waterTexture, transparent: true, opacity: 0.65, side: THREE.DoubleSide 
+});
+
+const steveTexture = textureLoader.load('steve.png');
+steveTexture.magFilter = THREE.NearestFilter; steveTexture.minFilter = THREE.NearestFilter;
+
+// ---------- Firebase Setup ----------
+const firebaseConfig = {
+  apiKey: "AIzaSyAWHrtJVR6ZbyzI5JvXcfc6demV9DTD0cw",
+  authDomain: "samon-4a57a.firebaseapp.com",
+  databaseURL: "https://samon-4a57a-default-rtdb.firebaseio.com",
+  projectId: "samon-4a57a",
+  storageBucket: "samon-4a57a.firebasestorage.app",
+  messagingSenderId: "186690963747",
+  appId: "1:186690963747:web:3b29ffcc9b643d2f302496",
+  measurementId: "G-7BD61DHGBX"
+};
+const ROOM = "main";
+const blocksPath = "rooms/" + ROOM + "/blocks";
+const playersPath = "rooms/" + ROOM + "/players";
+const timePath = "rooms/" + ROOM + "/time"; // サーバー時間同期用のパス
+
+let fbReady = false, db = null, playerRef = null, myId = null;
+let playerName = "", myColor = "#ffffff";
+try {
+  if (typeof firebase !== "undefined") {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+    fbReady = false;
+  }
+} catch (err) {
+  console.warn("Firebaseへの接続に失敗しました。ローカル時間で実行します。", err);
+  fbReady = false;
+}
+
+function colorForId(id){
+  let h = 0; for (let i=0;i<id.length;i++) h = (h*31 + id.charCodeAt(i)) >>> 0;
+  return "hsl(" + (h % 360) + ", 65%, 55%)";
+}
+
+// ---------- Noise & World Storage ----------
+function hash2(x, z) {
+  let n = Math.sin(x*127.1 + z*311.7 + CHUNK_SEED*0.001) * 43758.5453123;
+  return n - Math.floor(n);
+}
+function smooth(t){ return t*t*(3-2*t); }
+function valueNoise(x, z) {
+  const xi = Math.floor(x), zi = Math.floor(z);
+  const xf = x - xi, zf = z - zi;
+  const v00 = hash2(xi,zi), v10 = hash2(xi+1,zi);
+  const v01 = hash2(xi,zi+1), v11 = hash2(xi+1,zi+1);
+  const a = v00 + (v10-v00)*smooth(xf);
+  const b = v01 + (v11-v01)*smooth(xf);
+  return a + (b-a)*smooth(zf);
+}
+function fbm(x, z, octaves) {
+  let total = 0, amp = 1, freq = 1, maxAmp = 0;
+  for (let i=0;i<octaves;i++) {
+    total += valueNoise(x*freq, z*freq) * amp;
+    maxAmp += amp; amp *= 0.5; freq *= 2.15;
+  }
+  return total / maxAmp;
+}
+
+const world = new Uint8Array(W*W*H);
+function idx(x,y,z){ return x + z*W + y*W*W; }
+function inBounds(x,y,z){ return x>=0 && x<W && y>=0 && y<H && z>=0 && z<W; }
+function getBlock(x,y,z){ if(!inBounds(x,y,z)) return AIR; return world[idx(x,y,z)]; }
+function setBlock(x,y,z,v){ if(!inBounds(x,y,z)) return; world[idx(x,y,z)] = v; }
+
+function generateWorld() {
+  const heightMap = new Int16Array(W*W);
+  for (let x=0;x<W;x++) {
+    for (let z=0;z<W;z++) {
+      const n = fbm(x*0.045, z*0.045, 4);
+      const h = Math.floor(9 + n*20);
+      heightMap[x+z*W] = h;
+      for (let y=0; y<H; y++) {
+        let b = AIR;
+        if (y < h-4) b = STONE;
+        else if (y < h) b = (h < WATER_LEVEL+1) ? SAND : DIRT;
+        else if (y === h) {
+          if (h < WATER_LEVEL+1) b = SAND; else if (h > 24) b = SNOW; else b = GRASS;
+        } else if (y <= WATER_LEVEL && y > h) { b = WATER; }
+        if (b !== AIR) setBlock(x,y,z,b);
+      }
+    }
+  }
+  // Trees
+  for (let x=3;x<W-3;x++) {
+    for (let z=3;z<W-3;z++) {
+      const h = heightMap[x+z*W];
+      if (h >= WATER_LEVEL+1 && h < 23 && hash2(x*3.1,z*7.7) < 0.02) {
+        const trunkH = 3 + Math.floor(hash2(x*9.3,z*2.1)*3);
+        for (let ty=1; ty<=trunkH; ty++) setBlock(x, h+ty, z, WOOD);
+        const topY = h+trunkH;
+        for (let lx=-2; lx<=2; lx++) {
+          for (let lz=-2; lz<=2; lz++) {
+            for (let ly=-2; ly<=1; ly++) {
+              if (Math.abs(lx)+Math.abs(lz)+Math.abs(ly*0.8) <= 3 && !(lx===0 && lz===0 && ly<=0)) {
+                if (getBlock(x+lx, topY+ly, z+lz) === AIR) setBlock(x+lx, topY+ly, z+lz, LEAVES);
+              }
             }
+          }
         }
+      }
+    }
+  }
+  return heightMap;
+}
+generateWorld();
 
-        // ローカルストレージに保存
-        function saveWorlds() {
-            localStorage.setItem('mc_worlds', JSON.stringify(worlds));
+// ---------- Three.js Renderer Setup ----------
+const scene = new THREE.Scene();
+const globalFog = new THREE.Fog(0x8ec6f0, 50, 140);
+scene.fog = globalFog;
+
+const camera = new THREE.PerspectiveCamera(72, window.innerWidth/window.innerHeight, 0.1, 500);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+document.body.appendChild(renderer.domElement);
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.6); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 0.7); scene.add(sun);
+
+const playerLight = new THREE.PointLight(0xffaa44, 0.0, 12); scene.add(playerLight);
+const torchLights = [];
+
+function updateTorchLightsInScene() {
+  torchLights.forEach(l => scene.remove(l)); torchLights.length = 0;
+  let count = 0;
+  for (let x=0; x<W; x++) {
+    for (let z=0; z<W; z++) {
+      for (let y=0; y<H; y++) {
+        if (getBlock(x,y,z) === TORCH && count < 40) {
+          const tl = new THREE.PointLight(0xff9933, 1.3, 11);
+          tl.position.set(x + 0.5, y + 0.6, z + 0.5);
+          scene.add(tl); torchLights.push(tl); count++;
         }
+      }
+    }
+  }
+}
 
-        // --- 画面切り替え ---
-        function showSelectScreen() {
-            document.getElementById('create-screen').classList.remove('active');
-            document.getElementById('select-screen').classList.add('active');
-            renderWorldList(); // 戻った時にリストを再描画
+// 雲 (Clouds) の描画
+const cloudTexture = textureLoader.load('clouds.png');
+cloudTexture.wrapS = THREE.RepeatWrapping; cloudTexture.wrapT = THREE.RepeatWrapping;
+cloudTexture.magFilter = THREE.NearestFilter; cloudTexture.minFilter = THREE.NearestFilter;
+cloudTexture.repeat.set(12, 12);
+const cloudMat = new THREE.MeshBasicMaterial({ map: cloudTexture, transparent: true, alphaTest: 0.1, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide });
+const cloudMesh = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), cloudMat);
+cloudMesh.rotation.x = -Math.PI / 2; cloudMesh.position.set(W / 2, 55, W / 2);
+scene.add(cloudMesh);
+
+// ---------- Mesh Building ----------
+let opaqueMesh = null, waterMesh = null, dirty = false;
+function faceShade(nx, ny, nz) { return ny === 1 ? 1.0 : (ny === -1 ? 0.45 : (nx !== 0 ? 0.72 : 0.6)); }
+
+const FACES = [
+  { dir:[1,0,0],  corners:[[1,0,0],[1,1,0],[1,1,1],[1,0,1]] },
+  { dir:[-1,0,0], corners:[[0,0,1],[0,1,1],[0,1,0],[0,0,0]] },
+  { dir:[0,1,0],  corners:[[0,1,1],[1,1,1],[1,1,0],[0,1,0]] },
+  { dir:[0,-1,0], corners:[[0,0,0],[1,0,0],[1,0,1],[0,0,1]] },
+  { dir:[0,0,1],  corners:[[1,0,1],[1,1,1],[0,1,1],[0,0,1]] },
+  { dir:[0,0,-1], corners:[[0,0,0],[0,1,0],[1,1,0],[1,0,0]] }
+];
+
+function buildMeshes() {
+  const opChunks = {};
+  OPAQUE_RENDER_TYPES.forEach(type => { opChunks[type] = { pos:[], col:[], norm:[], uv:[] }; });
+  const wPos=[], wCol=[], wNorm=[], wUV=[];
+
+  for (let x=0;x<W;x++){
+    for (let z=0;z<W;z++){
+      for (let y=0;y<H;y++){
+        const b = getBlock(x,y,z); if (b === AIR) continue;
+        const isWater = (b === WATER), isTorch = (b === TORCH);
+
+        for (const f of FACES) {
+          const nx=f.dir[0], ny=f.dir[1], nz=f.dir[2];
+          const nb = getBlock(x+nx,y+ny,z+nz);
+          if (isWater ? (nb !== AIR) : (nb !== AIR && nb !== WATER && nb !== TORCH) && !isTorch) continue;
+
+          let renderType = b;
+          if (b === GRASS && ny === 1) renderType = GRASS_TOP;
+
+          let col = BASE_COLOR[renderType] || [1,1,1];
+          const shade = faceShade(nx,ny,nz);
+          const r=col[0]*shade, g=col[1]*shade, bl=col[2]*shade;
+
+          const chunk = isWater ? null : opChunks[renderType];
+          const arr = isWater ? wPos : chunk.pos;
+          const carr = isWater ? wCol : chunk.col;
+          const narr = isWater ? wNorm : chunk.norm;
+          const uvarr = isWater ? wUV : chunk.uv;
+
+          // 松明(TORCH)の形状定義修正 (太さ: 0.125, 高さ: 0.6)
+          let cx = x, cy = y, cz = z;
+          let scaleX = 1, scaleY = 1, scaleZ = 1;
+          if (isTorch) {
+            scaleX = 0.125; scaleZ = 0.125; scaleY = 0.6;
+            cx = x + 0.4375; cz = z + 0.4375; cy = y;
+          }
+
+          const c = f.corners;
+          const tri = [c[0],c[1],c[2], c[0],c[2],c[3]];
+          
+          // 松明・ブロック共通の標準UV割り当て
+          const uvs = [[0,0], [0,1], [1,1], [0,0], [1,1], [1,0]];
+          let uvIdx = 0;
+
+          for (const corner of tri) {
+            arr.push(cx + corner[0]*scaleX, cy + corner[1]*scaleY, cz + corner[2]*scaleZ);
+            carr.push(r,g,bl);
+            narr.push(nx,ny,nz);
+            uvarr.push(uvs[uvIdx][0], uvs[uvIdx][1]);
+            uvIdx++;
+          }
         }
+      }
+    }
+  }
 
-        function showCreateScreen() {
-            if (worlds.length >= MAX_WORLDS) return;
-            // 初期化
-            document.getElementById('new-world-name').value = "新規ワールド";
-            currentSelectedMode = 'survival';
-            updateModeButtonText();
-            
-            document.getElementById('select-screen').classList.remove('active');
-            document.getElementById('create-screen').classList.add('active');
-        }
+  if (opaqueMesh) { scene.remove(opaqueMesh); opaqueMesh.geometry.dispose(); }
+  if (waterMesh) { scene.remove(waterMesh); waterMesh.geometry.dispose(); }
 
-        // --- 描画ロジック ---
-        function renderWorldList() {
-            const listContainer = document.getElementById('world-list');
-            listContainer.innerHTML = '';
+  const finalOpPos = [], finalOpCol = [], finalOpNorm = [], finalOpUV = [];
+  const groups = []; let vertexOffset = 0;
 
-            if (worlds.length === 0) {
-                listContainer.innerHTML = '<p style="text-align:center; color:#aaa; margin-top:100px;">ワールドがありません</p>';
-            } else {
-                worlds.forEach((world, index) => {
-                    const modeText = world.mode === 'survival' ? 'サバイバルモード' : 'クリエイティブモード';
-                    
-                    const item = document.createElement('div');
-                    item.className = 'world-item';
-                    item.onclick = () => playWorld(index);
-                    item.innerHTML = `
-                        <div class="world-info">
-                            <span class="world-name">${world.name}</span>
-                            <span class="world-mode">${modeText}</span>
-                        </div>
-                        <button class="delete-btn" onclick="deleteWorld(${index}, event)">削除</button>
-                    `;
-                    listContainer.appendChild(item);
-                });
-            }
+  OPAQUE_RENDER_TYPES.forEach(type => {
+    const chunk = opChunks[type]; const count = chunk.pos.length / 3;
+    if (count > 0) {
+      finalOpPos.push(...chunk.pos); finalOpCol.push(...chunk.col);
+      finalOpNorm.push(...chunk.norm); finalOpUV.push(...chunk.uv);
+      groups.push({ start: vertexOffset, count: count, materialIndex: opMaterialIndexMap[type] });
+      vertexOffset += count;
+    }
+  });
 
-            // 3個制限のチェック
-            const btnCreate = document.getElementById('btn-create-new');
-            const warning = document.getElementById('limit-warning');
-            if (worlds.length >= MAX_WORLDS) {
-                btnCreate.disabled = true;
-                warning.style.display = 'block';
-            } else {
-                btnCreate.disabled = false;
-                warning.style.display = 'none';
-            }
-        }
+  if (vertexOffset > 0) {
+    const opGeo = new THREE.BufferGeometry();
+    opGeo.setAttribute('position', new THREE.Float32BufferAttribute(finalOpPos,3));
+    opGeo.setAttribute('color', new THREE.Float32BufferAttribute(finalOpCol,3));
+    opGeo.setAttribute('normal', new THREE.Float32BufferAttribute(finalOpNorm,3));
+    opGeo.setAttribute('uv', new THREE.Float32BufferAttribute(finalOpUV,2));
+    groups.forEach(g => opGeo.addGroup(g.start, g.count, g.materialIndex));
+    opaqueMesh = new THREE.Mesh(opGeo, opMaterialsArray); scene.add(opaqueMesh);
+  }
+  if (wPos.length > 0) {
+    const wGeo = new THREE.BufferGeometry();
+    wGeo.setAttribute('position', new THREE.Float32BufferAttribute(wPos,3));
+    wGeo.setAttribute('color', new THREE.Float32BufferAttribute(wCol,3));
+    wGeo.setAttribute('normal', new THREE.Float32BufferAttribute(wNorm,3));
+    wGeo.setAttribute('uv', new THREE.Float32BufferAttribute(wUV,2));
+    waterMesh = new THREE.Mesh(wGeo, wMat); scene.add(waterMesh);
+  }
+  updateTorchLightsInScene();
+}
+buildMeshes();
 
-        // --- ワールド作成・削除・プレイ ---
-        function toggleMode() {
-            currentSelectedMode = currentSelectedMode === 'survival' ? 'creative' : 'survival';
-            updateModeButtonText();
-        }
+// ---------- Player Configuration ----------
+const player = {
+  pos: new THREE.Vector3(W/2, H, W/2), vel: new THREE.Vector3(0,0,0),
+  yaw: Math.PI*0.75, pitch: -0.2, onGround: false, height: 1.7, radius: 0.3
+};
+(function findSpawn(){
+  const sx = Math.floor(W/2), sz = Math.floor(W/2); let sy = H-1;
+  while (sy>0 && getBlock(sx,sy,sz)===AIR) sy--; player.pos.set(sx+0.5, sy+3, sz+0.5);
+})();
 
-        function updateModeButtonText() {
-            const btn = document.getElementById('btn-toggle-mode');
-            if (currentSelectedMode === 'survival') {
-                btn.innerText = "ゲームモード: サバイバル";
-            } else {
-                btn.innerText = "ゲームモード: クリエイティブ";
-            }
-        }
+const GRAVITY = -26, JUMP_SPEED = 8.4, MOVE_SPEED = 5.2;
+const keys = {};
+document.addEventListener('keydown', e=>{
+  keys[e.code]=true; const num = parseInt(e.key); if (num>=1 && num<=8) selectSlot(num-1);
+});
+document.addEventListener('keyup', e=>{ keys[e.code]=false; });
 
-        function createNewWorld() {
-            if (worlds.length >= MAX_WORLDS) return;
+let selected = 0;
+function selectSlot(i){
+  selected = ((i%HOTBAR_BLOCKS.length)+HOTBAR_BLOCKS.length)%HOTBAR_BLOCKS.length; updateHotbarUI();
+}
+document.addEventListener('wheel', e=>{ if (document.pointerLockElement) selectSlot(selected + (e.deltaY>0?1:-1)); });
 
-            let name = document.getElementById('new-world-name').value.trim();
-            if (name === "") name = "名もなきワールド";
+function isSolidBlock(b){ return b !== AIR && b !== WATER && b !== TORCH; }
+function collidesAt(px,py,pz){
+  const r = player.radius;
+  const minX = Math.floor(px-r), maxX = Math.floor(px+r);
+  const minZ = Math.floor(pz-r), maxZ = Math.floor(pz+r);
+  const minY = Math.floor(py), maxY = Math.floor(py+player.height);
+  for (let x=minX;x<=maxX;x++)
+    for (let y=minY;y<=maxY;y++)
+      for (let z=minZ;z<=maxZ;z++) if (isSolidBlock(getBlock(x,y,z))) return true;
+  return false;
+}
 
-            const newWorld = {
-                id: Date.now(), // 一意のIDとして現在時刻を使用
-                name: name,
-                mode: currentSelectedMode
-            };
+function updatePlayer(dt){
+  const forward = new THREE.Vector3(-Math.sin(player.yaw),0,-Math.cos(player.yaw));
+  const right = new THREE.Vector3(Math.sin(player.yaw+Math.PI/2),0,Math.cos(player.yaw+Math.PI/2));
+  let moveX=0, moveZ=0;
+  if (keys['KeyW']) { moveX+=forward.x; moveZ+=forward.z; } if (keys['KeyS']) { moveX-=forward.x; moveZ-=forward.z; }
+  if (keys['KeyD']) { moveX+=right.x; moveZ+=right.z; }  if (keys['KeyA']) { moveX-=right.x; moveZ-=right.z; }
+  const len = Math.hypot(moveX,moveZ); if (len>0){ moveX/=len; moveZ/=len; }
 
-            worlds.push(newWorld);
-            saveWorlds();
-            showSelectScreen();
-        }
+  player.vel.x = moveX*MOVE_SPEED; player.vel.z = moveZ*MOVE_SPEED; player.vel.y += GRAVITY*dt;
+  if (player.vel.y < -40) player.vel.y = -40;
+  if (keys['Space'] && player.onGround){ player.vel.y = JUMP_SPEED; player.onGround = false; }
 
-        function deleteWorld(index, event) {
-            // 親要素(world-item)のクリックイベント(playWorld)が発火しないように止める
-            event.stopPropagation();
-            
-            if (confirm(`「${worlds[index].name}」を本当に削除しますか？\n(この操作は元に戻せません)`)) {
-                worlds.splice(index, 1);
-                saveWorlds();
-                renderWorldList();
-            }
-        }
+  let nx = player.pos.x + player.vel.x*dt; if (!collidesAt(nx, player.pos.y, player.pos.z)) player.pos.x = nx;
+  let nz = player.pos.z + player.vel.z*dt; if (!collidesAt(player.pos.x, player.pos.y, nz)) player.pos.z = nz;
+  let ny = player.pos.y + player.vel.y*dt;
+  if (!collidesAt(player.pos.x, ny, player.pos.z)) { player.pos.y = ny; player.onGround = false; } 
+  else { if (player.vel.y < 0) player.onGround = true; player.vel.y = 0; }
 
-        function playWorld(index) {
-            const world = worlds[index];
-            // URLパラメータを使って splay.html にデータを引き継ぐ
-            const url = `splay.html?id=${world.id}&name=${encodeURIComponent(world.name)}&mode=${world.mode}`;
-            window.location.href = url;
-        }
-    </script>
+  if (player.pos.y < -10) { player.pos.set(W/2, H, W/2); player.vel.set(0,0,0); }
+  camera.position.set(player.pos.x, player.pos.y+player.height, player.pos.z);
+  camera.rotation.order = 'YXZ'; camera.rotation.y = player.yaw; camera.rotation.x = player.pitch;
+  playerLight.position.set(player.pos.x, player.pos.y + player.height, player.pos.z);
+}
+
+// ---------- Pointer Lock & Initializer ----------
+const canvas = renderer.domElement, startScreen = document.getElementById('startScreen');
+const pausedEl = document.getElementById('paused'), startBtn = document.getElementById('startBtn');
+const nameInput = document.getElementById('nameInput'), nameError = document.getElementById('nameError');
+
+nameInput.addEventListener('keydown', e=>{ if (e.key === 'Enter') startBtn.click(); });
+let gameStarted = false;
+
+startBtn.addEventListener('click', ()=>{
+  const name = nameInput.value.trim().slice(0,10);
+  if (!name) { nameError.classList.add('show'); nameInput.focus(); return; }
+  nameError.classList.remove('show'); playerName = name;
+  myId = 'p_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36);
+  myColor = colorForId(myId); updateOnlineListUI({}); joinMultiplayer();
+  gameStarted = true; startScreen.style.display = 'none'; canvas.requestPointerLock();
+});
+canvas.addEventListener('click', ()=>{ if (!document.pointerLockElement && gameStarted) canvas.requestPointerLock(); });
+document.addEventListener('pointerlockchange', ()=>{
+  const locked = document.pointerLockElement === canvas;
+  startScreen.style.display = locked ? 'none' : (gameStarted ? 'none' : 'flex');
+  pausedEl.style.display = (!locked && gameStarted) ? 'flex' : 'none';
+});
+document.addEventListener('mousemove', e=>{
+  if (document.pointerLockElement !== canvas) return;
+  player.yaw -= e.movementX * 0.0022; player.pitch -= e.movementY * 0.0022;
+  player.pitch = Math.max(-Math.PI/2 + 0.05, Math.min(Math.PI/2 - 0.05, player.pitch));
+});
+
+// ---------- Block Interacting ----------
+function raycastVoxel(maxDist){
+  const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+  const origin = camera.position.clone();
+  let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
+  const stepX = dir.x>0?1:-1, stepY = dir.y>0?1:-1, stepZ = dir.z>0?1:-1;
+  const tDeltaX = dir.x===0?Infinity:Math.abs(1/dir.x), tDeltaY = dir.y===0?Infinity:Math.abs(1/dir.y), tDeltaZ = dir.z===0?Infinity:Math.abs(1/dir.z);
+  let tMaxX = dir.x===0?Infinity:(stepX>0?Math.floor(origin.x)+1-origin.x:origin.x-Math.ceil(origin.x)+1)*tDeltaX;
+  let tMaxY = dir.y===0?Infinity:(stepY>0?Math.floor(origin.y)+1-origin.y:origin.y-Math.ceil(origin.y)+1)*tDeltaY;
+  let tMaxZ = dir.z===0?Infinity:(stepZ>0?Math.floor(origin.z)+1-origin.z:origin.z-Math.ceil(origin.z)+1)*tDeltaZ;
+  let dist = 0; let lastNormal = [0,0,0];
+  while (dist < maxDist) {
+    const b = getBlock(x,y,z); if (b !== AIR && b !== WATER) return { x,y,z, normal:lastNormal, block:b };
+    if (tMaxX < tMaxY && tMaxX < tMaxZ) { x += stepX; dist = tMaxX; tMaxX += tDeltaX; lastNormal=[-stepX,0,0]; } 
+    else if (tMaxY < tMaxZ) { y += stepY; dist = tMaxY; tMaxY += tDeltaY; lastNormal=[0,-stepY,0]; } 
+    else { z += stepZ; dist = tMaxZ; tMaxZ += tDeltaZ; lastNormal=[0,0,-stepZ]; }
+  }
+  return null;
+}
+
+canvas.addEventListener('mousedown', e=>{
+  if (document.pointerLockElement !== canvas) return;
+  const hit = raycastVoxel(7); if (!hit) return;
+  if (e.button === 0) { setBlock(hit.x, hit.y, hit.z, AIR); dirty = true; pushBlockEdit(hit.x, hit.y, hit.z, AIR); } 
+  else if (e.button === 2) {
+    const px = hit.x+hit.normal[0], py = hit.y+hit.normal[1], pz = hit.z+hit.normal[2];
+    if (HOTBAR_BLOCKS[selected] === TORCH || (px<Math.floor(player.pos.x-0.3)||px>Math.floor(player.pos.x+0.3)||py<Math.floor(player.pos.y)||py>Math.floor(player.pos.y+player.height)||pz<Math.floor(player.pos.z-0.3)||pz>Math.floor(player.pos.z+0.3))) {
+      const block = HOTBAR_BLOCKS[selected]; setBlock(px,py,pz, block); dirty = true; pushBlockEdit(px,py,pz, block);
+    }
+  }
+});
+canvas.addEventListener('contextmenu', e=> e.preventDefault());
+
+// ---------- Multiplayer Sync Engine (Firebase) ----------
+function pushBlockEdit(x,y,z,val){
+  if (!fbReady || !db) return;
+  db.ref(blocksPath + '/' + x + '_' + y + '_' + z).set(val).catch(()=>{});
+}
+function onBlockEdit(snap){
+  const parts = snap.key.split('_').map(Number);
+  if (parts.length === 3) { setBlock(parts[0], parts[1], parts[2], snap.val()); dirty = true; }
+}
+
+function joinMultiplayer(){
+  if (!fbReady || !db) {
+    document.getElementById('onlineList').innerHTML = '<div class="onlineTitle">オフラインプレイ</div>';
+    return;
+  }
+  
+  // サーバー上の同期時間監視を最優先で開始
+  db.ref(timePath).on('value', snap => {
+    if (snap.exists()) { gameTime = snap.val(); }
+  });
+
+  playerRef = db.ref(playersPath + '/' + myId);
+  playerRef.onDisconnect().remove();
+  playerRef.set({ name: playerName, color: myColor, x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch, ts: Date.now() });
+
+  db.ref(playersPath).on('value', snap=>{ updateRemotePlayers(snap.val() || {}); });
+  db.ref(blocksPath).once('value').then(snap=>{
+    const val = snap.val() || {};
+    for (const k in val) { const p = k.split('_').map(Number); if (p.length === 3) setBlock(p[0], p[1], p[2], val[k]); }
+    dirty = true;
+    db.ref(blocksPath).on('child_added', onBlockEdit); db.ref(blocksPath).on('child_changed', onBlockEdit);
+  });
+}
+
+// ---------- 256x256 スキン(steve.png)のUVマッピングバグ完全修正関数 ----------
+function applySteveUVs(geo) {
+  // 256x256ピクセル座標系から、マインクラフト標準スキン配置を定義
+  // [uMin, vMin, uMax, vMax] (テクスチャの下を0, 上を1としてマッピング変換)
+  const computeUV = (x1, y1, x2, y2) => [x1/256, 1-(y2/256), x2/256, 1-(y1/256)];
+
+  // 頭部(Head)のUVマップ定義 (128x128グリッド内の標準配置)
+  const headUVs = {
+    right:  computeUV(0,  32, 32, 64),
+    front:  computeUV(32, 32, 64, 64),
+    left:   computeUV(64, 32, 96, 64),
+    back:   computeUV(96, 32, 128,64),
+    top:    computeUV(32, 0,  64, 32),
+    bottom: computeUV(64, 0,  96, 32)
+  };
+
+  // 胴体(Body/Limb兼用)のUVマップ定義
+  const bodyUVs = {
+    right:  computeUV(64,  128, 80,  192),
+    front:  computeUV(80,  128, 112, 192),
+    left:   computeUV(112, 128, 128, 192),
+    back:   computeUV(128, 128, 160, 192),
+    top:    computeUV(80,  96,  112, 128),
+    bottom: computeUV(112, 96,  148, 128)
+  };
+
+  const setFaceUVs = (array, faceIndex, coords) => {
+    const idx = faceIndex * 8;
+    array[idx]   = coords[0]; array[idx+1] = coords[1]; // 左下
+    array[idx+2] = coords[2]; array[idx+3] = coords[1]; // 右下
+    array[idx+4] = coords[0]; array[idx+5] = coords[3]; // 左上
+    array[idx+6] = coords[2]; array[idx+7] = coords[3]; // 右上
+  };
+
+  const uvs = new Float32Array(48);
+  const target = (geo.parameters.height === 0.5) ? headUVs : bodyUVs;
+  
+  // Three.js BoxGeometry の面順序: 右(0), 左(1), 上(2), 下(3), 前(4), 後(5)
+  setFaceUVs(uvs, 0, target.right);
+  setFaceUVs(uvs, 1, target.left);
+  setFaceUVs(uvs, 2, target.top);
+  setFaceUVs(uvs, 3, target.bottom);
+  setFaceUVs(uvs, 4, target.front);
+  setFaceUVs(uvs, 5, target.back);
+
+  geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+}
+
+const remotePlayers = {};
+function makeNameSprite(name){
+  const cnv = document.createElement('canvas'); cnv.width = 256; cnv.height = 64;
+  const ctx = cnv.getContext('2d'); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0,0,256,64);
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(String(name), 128, 32);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:new THREE.CanvasTexture(cnv), depthTest:false }));
+  sprite.scale.set(1.6,0.4,1); sprite.position.set(0, 2.15, 0); return sprite;
+}
+
+function makeAvatar(name, colorCss){
+  const group = new THREE.Group();
+  const steveMat = new THREE.MeshLambertMaterial({ map: steveTexture, transparent: true, side: THREE.DoubleSide });
+  
+  // 胴体 (256x256用にUV補正)
+  const bodyGeo = new THREE.BoxGeometry(0.5, 1.2, 0.35);
+  applySteveUVs(bodyGeo);
+  const body = new THREE.Mesh(bodyGeo, steveMat); body.position.y = 0.6; group.add(body);
+  
+  // 頭部 (256x256用にUV補正)
+  const headGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+  applySteveUVs(headGeo);
+  const head = new THREE.Mesh(headGeo, steveMat); head.position.y = 1.45; group.add(head);
+  
+  group.add(makeNameSprite(name));
+  return group;
+}
+
+function updateRemotePlayers(playersVal){
+  const seen = new Set();
+  for (const id in playersVal) {
+    if (id === myId) continue;
+    const p = playersVal[id]; if (!p) continue;
+    seen.add(id); let rp = remotePlayers[id];
+    if (!rp) {
+      const group = makeAvatar(p.name || '???', p.color || colorForId(id)); scene.add(group);
+      rp = remotePlayers[id] = { group, target: {x:p.x||0,y:p.y||0,z:p.z||0,yaw:p.yaw||0} };
+      group.position.set(rp.target.x, rp.target.y, rp.target.z);
+    }
+    rp.target.x = p.x||0; rp.target.y = p.y||0; rp.target.z = p.z||0; rp.target.yaw = p.yaw||0;
+  }
+  for (const id in remotePlayers) {
+    if (!seen.has(id)) { scene.remove(remotePlayers[id].group); delete remotePlayers[id]; }
+  }
+  updateOnlineListUI(playersVal);
+}
+
+function tickRemotePlayers(dt){
+  const t = Math.min(1, dt*12);
+  for (const id in remotePlayers) {
+    const rp = remotePlayers[id]; const g = rp.group, tg = rp.target;
+    g.position.x += (tg.x - g.position.x) * t; g.position.y += (tg.y - g.position.y) * t; g.position.z += (tg.z - g.position.z) * t;
+    let dy = tg.yaw - g.rotation.y;
+    while (dy > Math.PI) dy -= Math.PI*2; while (dy < -Math.PI) dy += Math.PI*2;
+    g.rotation.y += dy * t;
+  }
+}
+
+function updateOnlineListUI(playersVal){
+  const el = document.getElementById('onlineList'); el.innerHTML = '';
+  const title = document.createElement('div'); title.className = 'onlineTitle'; title.textContent = 'オンライン'; el.appendChild(title);
+  function addRow(name, color){
+    const row = document.createElement('div'); row.className = 'onlineRow';
+    const dot = document.createElement('span'); dot.className = 'onlineDot'; dot.style.background = color;
+    const label = document.createElement('span'); label.textContent = String(name);
+    row.appendChild(label); row.appendChild(dot); el.appendChild(row);
+  }
+  addRow(playerName + ' (自分)', myColor);
+  for (const id in playersVal) { if (id !== myId && playersVal[id]) addRow(playersVal[id].name || '???', playersVal[id].color || colorForId(id)); }
+}
+
+// ---------- Hotbar UI Synced with Real Textures ----------
+const hotbarEl = document.getElementById('hotbar');
+function updateHotbarUI(){
+  hotbarEl.innerHTML = '';
+  HOTBAR_BLOCKS.forEach((b,i)=>{
+    const slot = document.createElement('div');
+    slot.className = 'slot' + (i===selected?' active':'');
+    
+    if (b === TORCH) {
+      slot.style.background = `url(${torchCanvasDataUrl}) no-repeat center`;
+    } else {
+      slot.style.background = `url(${BLOCK_TEXTURES[b]}) no-repeat center`;
+    }
+    
+    const label = document.createElement('span'); label.textContent = (i+1);
+    slot.appendChild(label); slot.title = BLOCK_NAMES[b]; hotbarEl.appendChild(slot);
+  });
+}
+updateHotbarUI();
+
+// ---------- HUD ----------
+const hudEl = document.getElementById('hud');
+function updateHud(fps){
+  const hour = Math.floor(gameTime).toString().padStart(2, '0');
+  const min = Math.floor((gameTime % 1) * 60).toString().padStart(2, '0');
+  hudEl.innerHTML = `座標: X ${player.pos.x.toFixed(1)} Y ${player.pos.y.toFixed(1)} Z ${player.pos.z.toFixed(1)}<br>時間: ${hour}:${min}<br>選択中: ${BLOCK_NAMES[HOTBAR_BLOCKS[selected]]}<br>FPS: ${fps}`;
+}
+
+// ---------- 非線形・昼夜サイクル・環境発光ロジック ----------
+// 昼（4時〜20時の16時間）= 10分、夜（20時〜4時の8時間）= 7分
+function advanceGameTime(dt) {
+  // 1つの部屋に1人以上いる時、最初に部屋に入ったプレイヤー（または各自）がFirebaseの時間を少しずつ進める
+  if (fbReady && db && playerRef) {
+    db.ref(timePath).transaction(currentValue => {
+      let t = (currentValue === null) ? 8.0 : currentValue;
+      
+      // 現在が昼か夜かで進むスピード(1秒あたりのゲーム内時間)を変える
+      const isDay = (t >= 4.0 && t < 20.0);
+      const gameHoursToPass = isDay ? 16 : 8;
+      const realSecondsMax = isDay ? DAY_REAL_DURATION : NIGHT_REAL_DURATION;
+      
+      const increment = (gameHoursToPass / realSecondsMax) * dt;
+      t += increment;
+      if (t >= 24.0) t -= 24.0;
+      return t;
+    });
+  } else {
+    // オフラインフォールバック
+    const isDay = (gameTime >= 4.0 && gameTime < 20.0);
+    const gameHoursToPass = isDay ? 16 : 8;
+    const realSecondsMax = isDay ? DAY_REAL_DURATION : NIGHT_REAL_DURATION;
+    gameTime += (gameHoursToPass / realSecondsMax) * dt;
+    if (gameTime >= 24.0) gameTime -= 24.0;
+  }
+}
+
+function updateEnvironmentByTime() {
+  const dayProgress = gameTime / 24.0;
+  const angle = (dayProgress * Math.PI * 2) - (Math.PI / 2);
+  sun.position.set(Math.cos(angle) * 80 + W/2, Math.sin(angle) * 80, W/2);
+
+  let skyColor, sunIntensity, hemiIntensity, torchIntensity;
+
+  if (gameTime >= 4 && gameTime < 6) { 
+    let t = (gameTime - 4) / 2;
+    skyColor = new THREE.Color(0x0a0a14).lerp(new THREE.Color(0xcc714e), t);
+    sunIntensity = t * 0.35; hemiIntensity = 0.15 + t * 0.35; torchIntensity = 1.3 - t * 0.9;
+  } else if (gameTime >= 6 && gameTime < 11) { 
+    let t = (gameTime - 6) / 5;
+    skyColor = new THREE.Color(0xcc714e).lerp(new THREE.Color(0x8ec6f0), t);
+    sunIntensity = 0.35 + t * 0.35; hemiIntensity = 0.5 + t * 0.2; torchIntensity = 0.4;
+  } else if (gameTime >= 11 && gameTime < 16) { 
+    skyColor = new THREE.Color(0x8ec6f0); sunIntensity = 0.7; hemiIntensity = 0.7; torchIntensity = 0.2;
+  } else if (gameTime >= 16 && gameTime < 19) { 
+    let t = (gameTime - 16) / 3;
+    skyColor = new THREE.Color(0x8ec6f0).lerp(new THREE.Color(0xdd5522), t);
+    sunIntensity = 0.7 - t * 0.4; hemiIntensity = 0.7 - t * 0.3; torchIntensity = 0.2 + t * 0.7;
+  } else if (gameTime >= 19 && gameTime < 21) { 
+    let t = (gameTime - 19) / 2;
+    skyColor = new THREE.Color(0xdd5522).lerp(new THREE.Color(0x0a0a14), t);
+    sunIntensity = 0.3 * (1 - t); hemiIntensity = 0.4 - t * 0.25; torchIntensity = 0.9 + t * 0.6;
+  } else { 
+    skyColor = new THREE.Color(0x06060f); sunIntensity = 0.0; hemiIntensity = 0.15; torchIntensity = 1.5;
+  }
+
+  scene.background = skyColor; globalFog.color = skyColor;
+  sun.intensity = sunIntensity; hemi.color = skyColor; hemi.intensity = hemiIntensity;
+  playerLight.intensity = torchIntensity; torchLights.forEach(l => l.intensity = torchIntensity * 1.25);
+}
+
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ---------- Main Engine Loop ----------
+let lastTime = performance.now(), frameCount = 0, fpsTimer = 0, fps = 0, lastNetSend = 0;
+
+function animate(now){
+  requestAnimationFrame(animate);
+  const dt = Math.min((now - lastTime)/1000, 0.05); lastTime = now;
+
+  advanceGameTime(dt);
+  updateEnvironmentByTime();
+
+  if (cloudTexture) { cloudTexture.offset.x += 0.0015 * dt; cloudTexture.offset.y += 0.0006 * dt; }
+
+  if (document.pointerLockElement === canvas) {
+    updatePlayer(dt);
+    if (fbReady && playerRef && now - lastNetSend > 90) {
+      lastNetSend = now;
+      playerRef.update({ x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch, ts: Date.now() }).catch(()=>{});
+    }
+  }
+  tickRemotePlayers(dt);
+  if (dirty) { buildMeshes(); dirty = false; }
+
+  frameCount++; fpsTimer += dt;
+  if (fpsTimer >= 0.5) { fps = Math.round(frameCount/fpsTimer); frameCount=0; fpsTimer=0; }
+  updateHud(fps);
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
+
+window.addEventListener('beforeunload', ()=>{ if (playerRef) try{playerRef.remove();}catch(e){} });
+})();
+</script>
 </body>
 </html>
