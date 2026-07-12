@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Minecraft Clone</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #8ec6f0; }
+        #crosshair { position: fixed; top: 50%; left: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px; border: 2px solid white; border-radius: 50%; pointer-events: none; }
+        #hotbar { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 5px; background: rgba(0,0,0,0.5); padding: 5px; }
+        .slot { width: 40px; height: 40px; border: 2px solid white; }
+    </style>
+</head>
+<body>
+    <div id="crosshair"></div>
+    <div id="hotbar">
+        <div class="slot" style="background:gray"></div>
+        <div class="slot" style="background:brown"></div>
+    </div>
+
+<script type="module">
+import * as THREE from 'https://cdn.skypack.dev/three@0.132.2';
+import { PointerLockControls } from 'https://cdn.skypack.dev/three@0.132.2/examples/jsm/controls/PointerLockControls.js';
+
+// --- 設定 ---
+const W = 32, H = 16, D = 32;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8ec6f0);
+scene.fog = new THREE.Fog(0x8ec6f0, 20, 60);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// --- テクスチャ ---
+const loader = new THREE.TextureLoader();
+const textures = {
+    grass: loader.load('grass.png', null, null, () => console.warn('grass.png not found')),
+    dirt: loader.load('dirt.png', null, null, () => console.warn('dirt.png not found')),
+    stone: loader.load('stone.png', null, null, () => console.warn('stone.png not found'))
+};
+Object.values(textures).forEach(t => { t.magFilter = THREE.NearestFilter; });
+
+// --- ワールド生成 ---
+const world = [];
+for(let x=0; x<W; x++) {
+    world[x] = [];
+    for(let z=0; z<D; z++) {
+        world[x][z] = [];
+        for(let y=0; y<H; y++) {
+            world[x][z][y] = (y < 5) ? 'stone' : (y === 5 ? 'grass' : null);
+        }
+    }
+}
+
+// メッシュ構築関数 (簡略版)
+function createBlock(type, x, y, z) {
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const mat = new THREE.MeshLambertMaterial({ map: textures[type] || null, color: type ? 0xffffff : 0x888888 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    scene.add(mesh);
+    return mesh;
+}
+
+// 初期配置
+for(let x=0; x<W; x++) {
+    for(let z=0; z<D; z++) {
+        for(let y=0; y<H; y++) {
+            if(world[x][z][y]) createBlock(world[x][z][y], x, y, z);
+        }
+    }
+}
+
+// --- ライティング ---
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+sun.position.set(10, 20, 10);
+scene.add(sun);
+
+// --- 操作 ---
+const controls = new PointerLockControls(camera, document.body);
+document.addEventListener('click', () => controls.lock());
+camera.position.set(W/2, 10, D/2);
+
+// 移動処理
+const velocity = new THREE.Vector3();
+const direction = new THREE.Vector3();
+const speed = 5.0;
+
+document.addEventListener('keydown', (e) => {
+    if(e.code === 'KeyW') velocity.z = -speed;
+    if(e.code === 'KeyS') velocity.z = speed;
+    if(e.code === 'KeyA') velocity.x = -speed;
+    if(e.code === 'KeyD') velocity.x = speed;
+});
+document.addEventListener('keyup', () => {
+    velocity.x = 0; velocity.z = 0;
+});
+
+// --- ループ ---
+let prevTime = performance.now();
+function animate() {
+    requestAnimationFrame(animate);
+    const time = performance.now();
+    const delta = (time - prevTime) / 1000;
+
+    if (controls.isLocked) {
+        controls.moveRight(velocity.x * delta);
+        controls.moveForward(-velocity.z * delta);
+    }
+    prevTime = time;
+    renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

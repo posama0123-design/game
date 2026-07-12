@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft</title>
+    <!-- マイクラ風のピクセルフォントを読み込み -->
+    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=VT323&display=swap" rel="stylesheet">
+    
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #1d1d1d;
+            background-image: url('https://www.transparenttextures.com/patterns/cubes.png');
+            font-family: 'DotGothic16', sans-serif;
+            color: white;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        /* 画面コンテナ */
+        .screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        .active {
+            display: flex;
+        }
+
+        /* ローカルのロゴ画像 (1300x366の比率を維持) */
+        .logo {
+            width: 100%;
+            max-width: 650px; /* 画面サイズに合わせて調整（元サイズの半分を最大値に） */
+            aspect-ratio: 1300 / 366;
+            object-fit: contain;
+            margin-bottom: 50px;
+        }
+
+        /* メニューのボタン群のコンテナ */
+        .menu-container {
+            width: 400px;
+            max-width: 90%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            width: 100%;
+        }
+
+        /* マイクラ風ボタン */
+        button {
+            background-color: #c6c6c6;
+            border: 2px solid #000;
+            border-top-color: #fff;
+            border-left-color: #fff;
+            border-bottom-color: #555;
+            border-right-color: #555;
+            color: #333;
+            font-family: 'DotGothic16', sans-serif;
+            font-size: 20px;
+            padding: 10px;
+            width: 100%;
+            cursor: pointer;
+            text-shadow: 1px 1px 0px #fff;
+            transition: 0.1s;
+        }
+
+        button:hover {
+            background-color: #a0a0ff;
+            color: #fff;
+            text-shadow: 1px 1px 0px #3f3f3f;
+            border-top-color: #d6d6ff;
+            border-left-color: #d6d6ff;
+            border-bottom-color: #5555aa;
+            border-right-color: #5555aa;
+        }
+
+        button:active {
+            border-top-color: #555;
+            border-left-color: #555;
+            border-bottom-color: #fff;
+            border-right-color: #fff;
+        }
+
+        .half-btn {
+            width: 48%;
+        }
+
+        /* 設定などの入力フォーム */
+        .input-group {
+            margin-bottom: 15px;
+            width: 400px;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            text-shadow: 2px 2px 0px #000;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            background: #000;
+            color: #fff;
+            border: 2px solid #a0a0a0;
+            font-family: 'DotGothic16', sans-serif;
+            font-size: 18px;
+            box-sizing: border-box;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        /* 左下のクレジット表記 */
+        .credit {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: #fff;
+            font-size: 16px;
+            text-shadow: 2px 2px 0px #000;
+        }
+        
+        .version {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            color: #fff;
+            font-size: 16px;
+            text-shadow: 2px 2px 0px #000;
+        }
+
+        h2 {
+            text-shadow: 2px 2px 0px #000;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- メインメニュー画面 -->
+    <div id="main-menu" class="screen active">
+        <!-- ご指定のローカル画像ファイルを読み込み -->
+        <img src="fypqd1s9nz991.png" alt="Minecraft" class="logo">
+        
+        <div class="menu-container">
+            <!-- クリックでそれぞれのHTMLファイルへ遷移 -->
+            <button onclick="window.location.href='single.html'">シングルプレイ</button>
+            <button onclick="window.location.href='multi.html'">マルチプレイ</button>
+            <div class="row">
+                <button class="half-btn" onclick="showScreen('options-menu')">設定...</button>
+                <button class="half-btn" onclick="quitGame()">ゲームを終了</button>
+            </div>
+        </div>
+
+        <div class="credit">（一般公開禁止！！）</div>
+        <div class="version">Minecraft Web Edition</div>
+    </div>
+
+    <!-- 設定画面 (メインメニュー内にオーバーレイ表示) -->
+    <div id="options-menu" class="screen">
+        <h2>設定</h2>
+        <div class="input-group">
+            <label>プレイヤー名</label>
+            <input type="text" id="player-name" placeholder="Steve" value="Steve">
+        </div>
+        <div class="input-group">
+            <label>明るさ</label>
+            <input type="range" id="brightness" min="10" max="100" value="100" oninput="changeBrightness(this.value)">
+        </div>
+        <div class="menu-container" style="margin-top: 20px;">
+            <button onclick="saveOptions()">完了</button>
+        </div>
+    </div>
+
+    <script>
+        // 設定画面などの表示切り替え
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        // 明るさ設定
+        function changeBrightness(val) {
+            const brightness = val / 100;
+            document.body.style.filter = `brightness(${brightness})`;
+        }
+
+        // 設定の保存（ブラウザのローカルストレージに保存）
+        function saveOptions() {
+            const name = document.getElementById('player-name').value;
+            localStorage.setItem("mc_player_name", name);
+            showScreen('main-menu');
+        }
+
+        // ゲームの終了
+        function quitGame() {
+            if(confirm("ゲームを終了しますか？")) {
+                window.close();
+                document.body.innerHTML = "<h1 style='color:white; text-align:center; margin-top:20%'>ゲームを終了しました。(タブを閉じてください)</h1>";
+            }
+        }
+
+        // ページ読み込み時に保存された名前を反映
+        window.onload = () => {
+            const savedName = localStorage.getItem("mc_player_name");
+            if(savedName) document.getElementById('player-name').value = savedName;
+        }
+    </script>
+</body>
+</html>
