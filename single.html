@@ -3,122 +3,153 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Minecraft</title>
+  <title>Minecraft Style Torch System</title>
   <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      background-color: #000;
-    }
-    canvas {
-      display: block;
+    body { margin: 0; overflow: hidden; background: #000; }
+    #crosshair {
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 10px; height: 10px;
+      margin: -5px 0 0 -5px;
+      color: white; font-size: 20px;
+      user-select: none; pointer-events: none;
     }
   </style>
-  <!-- Three.js CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
+<div id="crosshair">+</div>
 <script>
-  // 1. シーン・カメラ・レンダラーの基本セットアップ
+  // 1. シーン・カメラ・レンダラー setup
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x050508); // 暗い夜・洞窟風の背景
-  scene.fog = new THREE.FogExp2(0x050508, 0.05);
+  scene.background = new THREE.Color(0x050814); // 暗い夜の空
+  scene.fog = new THREE.FogExp2(0x050814, 0.03);
 
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(0, 1.6, 3); // プレイヤー目線
-
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: false }); // ドット絵感を損なわないようアンチエイリアスOFF
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true; // 影の有効化
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.BasicShadowMap; // マイクラ風のパキッとした影
   document.body.appendChild(renderer.domElement);
 
-  // 2. 環境光（全体をかすかに照らす暗めの光）
-  const ambientLight = new THREE.AmbientLight(0x222233, 0.3);
-  scene.add(ambientLight);
-
-  // 衝突判定対象のオブジェクトリスト
-  const collidableObjects = [];
-
-  // 3. テクスチャの読み込みとドット絵向け設定
+  // 2. テクスチャ設定（ドット絵用 NearestFilter）
   const textureLoader = new THREE.TextureLoader();
   
-  // ※ 画像ファイル 'torch.png' が同フォルダに必要です（未指定時はプレースホルダー描画になります）
-  const torchTexture = textureLoader.load('torch.png', undefined, undefined, () => {
-    // 画像がない場合のフォールバック（動作確認用キャンバステクスチャ生成）
+  // 仮のキャンバステクスチャ（16x16）でマイクラ風松明を描画
+  const createTorchTexture = () => {
     const canvas = document.createElement('canvas');
-    canvas.width = 16;
-    canvas.height = 16;
+    canvas.width = 16; canvas.height = 16;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#8B4513';
-    ctx.fillRect(0, 0, 16, 16);
-    ctx.fillStyle = '#FFD700';
-    ctx.fillRect(4, 0, 8, 6);
-    torchTexture.image = canvas;
-    torchTexture.needsUpdate = true;
-  });
+    
+    // 木の柄の部分
+    ctx.fillStyle = '#5c4033';
+    ctx.fillRect(7, 4, 2, 10);
+    ctx.fillStyle = '#3d281e';
+    ctx.fillRect(8, 4, 1, 10);
 
-  // ドット絵感を維持するピクセルフィルタリング設定
-  torchTexture.magFilter = THREE.NearestFilter;
-  torchTexture.minFilter = THREE.NearestFilter;
+    // 炎・石炭部分
+    ctx.fillStyle = '#ffaa00';
+    ctx.fillRect(6, 2, 4, 3);
+    ctx.fillStyle = '#ffff55';
+    ctx.fillRect(7, 3, 2, 2);
 
-  // 4. 床（環境確認用）
-  const floorGeometry = new THREE.PlaneGeometry(20, 20);
-  const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 });
-  const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-  floor.rotation.x = -Math.PI / 2;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    return texture;
+  };
+
+  const torchTexture = createTorchTexture();
+
+  // 3. 環境光（月光）
+  const ambientLight = new THREE.AmbientLight(0x223355, 0.2);
+  scene.add(ambientLight);
+
+  // ブロック判定（衝突判定）用配列
+  const worldBlocks = [];
+
+  // --- 4. 松明（Torch）ブロックの生成関数 ---
+  function createTorchBlock(x, y, z) {
+    const torchGroup = new THREE.Group();
+    torchGroup.position.set(x, y, z);
+
+    // 【見た目】マイクラ風の細い松明メッシュ (2/16 x 10/16 x 2/16 ブロックサイズ)
+    const torchGeo = new THREE.BoxGeometry(2/16, 10/16, 2/16);
+    const torchMat = new THREE.MeshStandardMaterial({
+      map: torchTexture,
+      transparent: true,
+      alphaTest: 0.5,
+      roughness: 0.9
+    });
+    const torchMesh = new THREE.Mesh(torchGeo, torchMat);
+    torchMesh.position.set(0, (10/16)/2, 0); // 底面をブロックの床に合わせる
+    torchMesh.castShadow = true;
+    torchGroup.add(torchMesh);
+
+    // 【光】マイクラのレベル14相当の暖色光源
+    // (色, 強度: 2.5, 届く距離: 14ブロック, 減衰: 1.5)
+    const torchLight = new THREE.PointLight(0xff9933, 2.5, 14, 1.5);
+    torchLight.position.set(0, 0.6, 0); // 炎の位置
+    torchLight.castShadow = true;
+    torchLight.shadow.mapSize.width = 512;
+    torchLight.shadow.mapSize.height = 512;
+    torchGroup.add(torchLight);
+
+    // 【衝突判定】マイクラ仕様：松明自体も1x1x1のフルブロック領域として判定、または見えないAABBを設置
+    // ここではプレイヤーが通り抜けられない1ブロック分の透明HitBoxを設定
+    const boundingGeo = new THREE.BoxGeometry(1, 1, 1);
+    const boundingMat = new THREE.MeshBasicMaterial({ visible: false }); // 非表示の判定用ブロック
+    const hitBox = new THREE.Mesh(boundingGeo, boundingMat);
+    hitBox.position.set(0, 0.5, 0);
+    torchGroup.add(hitBox);
+
+    scene.add(torchGroup);
+
+    // 衝突判定リストに登録
+    worldBlocks.push(hitBox);
+
+    return { group: torchGroup, light: torchLight };
+  }
+
+  // --- 5. 地面と障害物ブロックの設置 ---
+  // 床ブロック
+  const floorGeo = new THREE.BoxGeometry(20, 1, 20);
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x557733, roughness: 1.0 });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.position.set(0, -0.5, 0);
   floor.receiveShadow = true;
   scene.add(floor);
+  worldBlocks.push(floor);
 
-  // 5. 松明（Torch）オブジェクトの構築
-  const torchGroup = new THREE.Group();
+  // 設置サンプル：松明をグリッドに沿って配置 (x:0, y:0, z:0)
+  const torch1 = createTorchBlock(0, 0, 0);
+  const torch2 = createTorchBlock(3, 0, -2);
 
-  // 松明の持ち手・本体のメッシュ
-  const torchGeometry = new THREE.BoxGeometry(0.15, 0.6, 0.15);
-  const torchMaterial = new THREE.MeshStandardMaterial({
-    map: torchTexture,
-    transparent: true,
-    alphaTest: 0.5 // 透過PNGの境界のチラつきを防止
-  });
-  const torchMesh = new THREE.Mesh(torchGeometry, torchMaterial);
-  torchMesh.position.y = 0.3; // 底面を原点に合わせる
-  torchMesh.castShadow = true;
-  torchGroup.add(torchMesh);
+  // 6. プレイヤー（カメラ）の位置調整
+  camera.position.set(0, 1.6, 5);
 
-  // 6. 光（PointLight）の設定
-  // 明るさ(2)、届く距離(8)、減衰(2)でまぶしすぎない自然な暖色光に
-  const torchLight = new THREE.PointLight(0xffaa33, 2, 8, 2);
-  torchLight.position.set(0, 0.55, 0); // 松明の先端付近に配置
-  torchLight.castShadow = true;
-  torchLight.shadow.mapSize.width = 512;
-  torchLight.shadow.mapSize.height = 512;
-  torchGroup.add(torchLight);
+  // 7. アニメーション（マイクラ風の微妙な光のゆらめき）
+  let clock = new THREE.Clock();
 
-  // 松明を配置（例：原点に設置）
-  torchGroup.position.set(0, 0, 0);
-  scene.add(torchGroup);
-
-  // 7. ブロック判定（衝突判定リストに追加）
-  // プレイヤー移動処理側の Raycaster や AABB 判定で参照する配列に追加
-  torchGroup.name = "TorchBlock";
-  collidableObjects.push(torchGroup);
-
-  // 8. アニメーションループ（炎のゆらめき演出付き）
-  let time = 0;
   function animate() {
     requestAnimationFrame(animate);
 
-    time += 0.05;
-    // 点光源の強さをわずかにランダム変動させて炎のゆらめきを表現
-    torchLight.intensity = 2 + Math.sin(time * 3) * 0.15 + (Math.random() - 0.5) * 0.1;
+    const elapsedTime = clock.getElapsedTime();
+    
+    // 松明の光をわずかにランダム明滅（マイクラの炎の揺らぎ）
+    const flicker1 = Math.sin(elapsedTime * 10) * 0.1 + (Math.random() - 0.5) * 0.05;
+    torch1.light.intensity = 2.5 + flicker1;
+
+    const flicker2 = Math.cos(elapsedTime * 12) * 0.1 + (Math.random() - 0.5) * 0.05;
+    torch2.light.intensity = 2.5 + flicker2;
 
     renderer.render(scene, camera);
   }
 
   animate();
 
-  // 9. ウィンドウサイズ変更対応
+  // 8. リサイズ処理
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
