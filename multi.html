@@ -116,17 +116,19 @@ const GRASS_TOP = 99;
 
 const BLOCK_NAMES = {};
 BLOCK_NAMES[GRASS]="草ブロック"; BLOCK_NAMES[DIRT]="土"; BLOCK_NAMES[STONE]="石";
-BLOCK_NAMES[SAND]="砂"; BLOCK_NAMES[WOOD]="木材"; BLOCK_NAMES[LEAVES]="葉"; 
+BLOCK_NAMES[SAND]="砂"; BLOCK_NAMES[WATER]="水"; BLOCK_NAMES[WOOD]="木材"; BLOCK_NAMES[LEAVES]="葉"; 
 BLOCK_NAMES[SNOW]="雪"; BLOCK_NAMES[TORCH]="松明";
 
-const HOTBAR_BLOCKS = [GRASS, DIRT, STONE, SAND, WOOD, LEAVES, SNOW, TORCH];
+// ホットバーに WATER（水）を追加
+const HOTBAR_BLOCKS = [GRASS, DIRT, STONE, SAND, WATER, WOOD, LEAVES, SNOW, TORCH];
 
-// ホットバー用のテクスチャパス指定 (草ブロックは指定通り「grass.png」を使用)
+// ホットバー用のテクスチャパス指定 (水ブロック用に water.png を登録)
 const BLOCK_TEXTURES = {};
 BLOCK_TEXTURES[GRASS] = 'grass.png';
 BLOCK_TEXTURES[DIRT]  = 'dirt.png';
 BLOCK_TEXTURES[STONE] = 'stone.png';
 BLOCK_TEXTURES[SAND]  = 'sand.png';
+BLOCK_TEXTURES[WATER] = 'water.png';
 BLOCK_TEXTURES[WOOD]  = 'wood.png';
 BLOCK_TEXTURES[LEAVES]= 'leaves.png';
 BLOCK_TEXTURES[SNOW]  = 'snow.png';
@@ -135,10 +137,9 @@ const BASE_COLOR = {};
 BASE_COLOR[GRASS] = [1,1,1]; BASE_COLOR[GRASS_TOP] = [1,1,1];
 BASE_COLOR[DIRT]  = [1,1,1]; BASE_COLOR[STONE] = [1,1,1]; BASE_COLOR[SAND]  = [1,1,1];
 BASE_COLOR[WOOD]  = [1,1,1]; BASE_COLOR[LEAVES]= [1,1,1]; BASE_COLOR[SNOW]  = [1,1,1];
-BASE_COLOR[WATER] = [0.20,0.42,0.62]; BASE_COLOR[TORCH] = [1,1,1];
+BASE_COLOR[WATER] = [1,1,1]; BASE_COLOR[TORCH] = [1,1,1];
 
 // ---------- Synced Time System Variables ----------
-// 昼（4:00〜20:00 = 16時間分）に10分（600秒）、夜（20:00〜翌4:00 = 8時間分）に7分（420秒）
 let gameTime = 8.0; 
 const DAY_REAL_DURATION = 600;  // 10分
 const NIGHT_REAL_DURATION = 420; // 7分
@@ -152,19 +153,15 @@ function generateTorchTexture() {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, 16, 16);
   
-  // 木の持ち手部分
   ctx.fillStyle = '#5c4033'; ctx.fillRect(7, 6, 2, 10);
   ctx.fillStyle = '#3d2b22'; ctx.fillRect(7, 10, 1, 6);
-  // 炭化の頭
   ctx.fillStyle = '#222222'; ctx.fillRect(6, 4, 4, 2);
-  // 炎の中心
   ctx.fillStyle = '#ffffa0'; ctx.fillRect(7, 1, 2, 3);
-  // 炎の外側
   ctx.fillStyle = '#ff6600';
   ctx.fillRect(6, 2, 1, 2); ctx.fillRect(9, 2, 1, 2); ctx.fillRect(7, 0, 2, 1);
   ctx.fillStyle = '#ff3300'; ctx.fillRect(6, 3, 1, 1); ctx.fillRect(9, 3, 1, 1);
 
-  torchCanvasDataUrl = canvas.toDataURL(); // インベントリ表示用
+  torchCanvasDataUrl = canvas.toDataURL();
   const texture = new THREE.CanvasTexture(canvas);
   texture.magFilter = THREE.NearestFilter;
   texture.minFilter = THREE.NearestFilter;
@@ -228,7 +225,7 @@ const firebaseConfig = {
 const ROOM = "main";
 const blocksPath = "rooms/" + ROOM + "/blocks";
 const playersPath = "rooms/" + ROOM + "/players";
-const timePath = "rooms/" + ROOM + "/time"; // サーバー時間同期用のパス
+const timePath = "rooms/" + ROOM + "/time";
 
 let fbReady = false, db = null, playerRef = null, myId = null;
 let playerName = "", myColor = "#ffffff";
@@ -329,10 +326,30 @@ const camera = new THREE.PerspectiveCamera(72, window.innerWidth/window.innerHei
 const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+
+// シャドウマップの有効化（影を追加）
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
 document.body.appendChild(renderer.domElement);
 
 const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.6); scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xffffff, 0.7); scene.add(sun);
+const sun = new THREE.DirectionalLight(0xffffff, 0.7);
+
+// 太陽光のシャドウ設定
+sun.castShadow = true;
+sun.shadow.mapSize.width = 2048;
+sun.shadow.mapSize.height = 2048;
+sun.shadow.camera.near = 0.5;
+sun.shadow.camera.far = 250;
+const d = 40;
+sun.shadow.camera.left = -d;
+sun.shadow.camera.right = d;
+sun.shadow.camera.top = d;
+sun.shadow.camera.bottom = -d;
+sun.shadow.bias = -0.0005;
+
+scene.add(sun);
 
 const playerLight = new THREE.PointLight(0xffaa44, 0.0, 12); scene.add(playerLight);
 const torchLights = [];
@@ -390,7 +407,7 @@ function buildMeshes() {
         for (const f of FACES) {
           const nx=f.dir[0], ny=f.dir[1], nz=f.dir[2];
           const nb = getBlock(x+nx,y+ny,z+nz);
-          if (isWater ? (nb !== AIR) : (nb !== AIR && nb !== WATER && nb !== TORCH) && !isTorch) continue;
+          if (isWater ? (nb === WATER) : (nb !== AIR && nb !== WATER && nb !== TORCH) && !isTorch) continue;
 
           let renderType = b;
           if (b === GRASS && ny === 1) renderType = GRASS_TOP;
@@ -405,7 +422,6 @@ function buildMeshes() {
           const narr = isWater ? wNorm : chunk.norm;
           const uvarr = isWater ? wUV : chunk.uv;
 
-          // 松明(TORCH)の形状定義修正 (太さ: 0.125, 高さ: 0.6)
           let cx = x, cy = y, cz = z;
           let scaleX = 1, scaleY = 1, scaleZ = 1;
           if (isTorch) {
@@ -416,7 +432,6 @@ function buildMeshes() {
           const c = f.corners;
           const tri = [c[0],c[1],c[2], c[0],c[2],c[3]];
           
-          // 松明・ブロック共通の標準UV割り当て
           const uvs = [[0,0], [0,1], [1,1], [0,0], [1,1], [1,0]];
           let uvIdx = 0;
 
@@ -455,7 +470,13 @@ function buildMeshes() {
     opGeo.setAttribute('normal', new THREE.Float32BufferAttribute(finalOpNorm,3));
     opGeo.setAttribute('uv', new THREE.Float32BufferAttribute(finalOpUV,2));
     groups.forEach(g => opGeo.addGroup(g.start, g.count, g.materialIndex));
-    opaqueMesh = new THREE.Mesh(opGeo, opMaterialsArray); scene.add(opaqueMesh);
+    opaqueMesh = new THREE.Mesh(opGeo, opMaterialsArray);
+    
+    // 影の投影と受光
+    opaqueMesh.castShadow = true;
+    opaqueMesh.receiveShadow = true;
+    
+    scene.add(opaqueMesh);
   }
   if (wPos.length > 0) {
     const wGeo = new THREE.BufferGeometry();
@@ -463,7 +484,12 @@ function buildMeshes() {
     wGeo.setAttribute('color', new THREE.Float32BufferAttribute(wCol,3));
     wGeo.setAttribute('normal', new THREE.Float32BufferAttribute(wNorm,3));
     wGeo.setAttribute('uv', new THREE.Float32BufferAttribute(wUV,2));
-    waterMesh = new THREE.Mesh(wGeo, wMat); scene.add(waterMesh);
+    waterMesh = new THREE.Mesh(wGeo, wMat);
+    
+    // 水の受光設定
+    waterMesh.receiveShadow = true;
+    
+    scene.add(waterMesh);
   }
   updateTorchLightsInScene();
 }
@@ -482,7 +508,7 @@ const player = {
 const GRAVITY = -26, JUMP_SPEED = 8.4, MOVE_SPEED = 5.2;
 const keys = {};
 document.addEventListener('keydown', e=>{
-  keys[e.code]=true; const num = parseInt(e.key); if (num>=1 && num<=8) selectSlot(num-1);
+  keys[e.code]=true; const num = parseInt(e.key); if (num>=1 && num<=9) selectSlot(num-1);
 });
 document.addEventListener('keyup', e=>{ keys[e.code]=false; });
 
@@ -568,7 +594,7 @@ function raycastVoxel(maxDist){
   let tMaxZ = dir.z===0?Infinity:(stepZ>0?Math.floor(origin.z)+1-origin.z:origin.z-Math.ceil(origin.z)+1)*tDeltaZ;
   let dist = 0; let lastNormal = [0,0,0];
   while (dist < maxDist) {
-    const b = getBlock(x,y,z); if (b !== AIR && b !== WATER) return { x,y,z, normal:lastNormal, block:b };
+    const b = getBlock(x,y,z); if (b !== AIR) return { x,y,z, normal:lastNormal, block:b };
     if (tMaxX < tMaxY && tMaxX < tMaxZ) { x += stepX; dist = tMaxX; tMaxX += tDeltaX; lastNormal=[-stepX,0,0]; } 
     else if (tMaxY < tMaxZ) { y += stepY; dist = tMaxY; tMaxY += tDeltaY; lastNormal=[0,-stepY,0]; } 
     else { z += stepZ; dist = tMaxZ; tMaxZ += tDeltaZ; lastNormal=[0,0,-stepZ]; }
@@ -605,7 +631,6 @@ function joinMultiplayer(){
     return;
   }
   
-  // サーバー上の同期時間監視を最優先で開始
   db.ref(timePath).on('value', snap => {
     if (snap.exists()) { gameTime = snap.val(); }
   });
@@ -623,13 +648,9 @@ function joinMultiplayer(){
   });
 }
 
-// ---------- 256x256 スキン(steve.png)のUVマッピングバグ完全修正関数 ----------
 function applySteveUVs(geo) {
-  // 256x256ピクセル座標系から、マインクラフト標準スキン配置を定義
-  // [uMin, vMin, uMax, vMax] (テクスチャの下を0, 上を1としてマッピング変換)
   const computeUV = (x1, y1, x2, y2) => [x1/256, 1-(y2/256), x2/256, 1-(y1/256)];
 
-  // 頭部(Head)のUVマップ定義 (128x128グリッド内の標準配置)
   const headUVs = {
     right:  computeUV(0,  32, 32, 64),
     front:  computeUV(32, 32, 64, 64),
@@ -639,7 +660,6 @@ function applySteveUVs(geo) {
     bottom: computeUV(64, 0,  96, 32)
   };
 
-  // 胴体(Body/Limb兼用)のUVマップ定義
   const bodyUVs = {
     right:  computeUV(64,  128, 80,  192),
     front:  computeUV(80,  128, 112, 192),
@@ -651,16 +671,15 @@ function applySteveUVs(geo) {
 
   const setFaceUVs = (array, faceIndex, coords) => {
     const idx = faceIndex * 8;
-    array[idx]   = coords[0]; array[idx+1] = coords[1]; // 左下
-    array[idx+2] = coords[2]; array[idx+3] = coords[1]; // 右下
-    array[idx+4] = coords[0]; array[idx+5] = coords[3]; // 左上
-    array[idx+6] = coords[2]; array[idx+7] = coords[3]; // 右上
+    array[idx]   = coords[0]; array[idx+1] = coords[1];
+    array[idx+2] = coords[2]; array[idx+3] = coords[1];
+    array[idx+4] = coords[0]; array[idx+5] = coords[3];
+    array[idx+6] = coords[2]; array[idx+7] = coords[3];
   };
 
   const uvs = new Float32Array(48);
   const target = (geo.parameters.height === 0.5) ? headUVs : bodyUVs;
   
-  // Three.js BoxGeometry の面順序: 右(0), 左(1), 上(2), 下(3), 前(4), 後(5)
   setFaceUVs(uvs, 0, target.right);
   setFaceUVs(uvs, 1, target.left);
   setFaceUVs(uvs, 2, target.top);
@@ -685,15 +704,17 @@ function makeAvatar(name, colorCss){
   const group = new THREE.Group();
   const steveMat = new THREE.MeshLambertMaterial({ map: steveTexture, transparent: true, side: THREE.DoubleSide });
   
-  // 胴体 (256x256用にUV補正)
   const bodyGeo = new THREE.BoxGeometry(0.5, 1.2, 0.35);
   applySteveUVs(bodyGeo);
-  const body = new THREE.Mesh(bodyGeo, steveMat); body.position.y = 0.6; group.add(body);
+  const body = new THREE.Mesh(bodyGeo, steveMat); body.position.y = 0.6;
+  body.castShadow = true; body.receiveShadow = true;
+  group.add(body);
   
-  // 頭部 (256x256用にUV補正)
   const headGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
   applySteveUVs(headGeo);
-  const head = new THREE.Mesh(headGeo, steveMat); head.position.y = 1.45; group.add(head);
+  const head = new THREE.Mesh(headGeo, steveMat); head.position.y = 1.45;
+  head.castShadow = true; head.receiveShadow = true;
+  group.add(head);
   
   group.add(makeNameSprite(name));
   return group;
@@ -771,14 +792,10 @@ function updateHud(fps){
 }
 
 // ---------- 非線形・昼夜サイクル・環境発光ロジック ----------
-// 昼（4時〜20時の16時間）= 10分、夜（20時〜4時の8時間）= 7分
 function advanceGameTime(dt) {
-  // 1つの部屋に1人以上いる時、最初に部屋に入ったプレイヤー（または各自）がFirebaseの時間を少しずつ進める
   if (fbReady && db && playerRef) {
     db.ref(timePath).transaction(currentValue => {
       let t = (currentValue === null) ? 8.0 : currentValue;
-      
-      // 現在が昼か夜かで進むスピード(1秒あたりのゲーム内時間)を変える
       const isDay = (t >= 4.0 && t < 20.0);
       const gameHoursToPass = isDay ? 16 : 8;
       const realSecondsMax = isDay ? DAY_REAL_DURATION : NIGHT_REAL_DURATION;
@@ -789,7 +806,6 @@ function advanceGameTime(dt) {
       return t;
     });
   } else {
-    // オフラインフォールバック
     const isDay = (gameTime >= 4.0 && gameTime < 20.0);
     const gameHoursToPass = isDay ? 16 : 8;
     const realSecondsMax = isDay ? DAY_REAL_DURATION : NIGHT_REAL_DURATION;
@@ -801,7 +817,11 @@ function advanceGameTime(dt) {
 function updateEnvironmentByTime() {
   const dayProgress = gameTime / 24.0;
   const angle = (dayProgress * Math.PI * 2) - (Math.PI / 2);
-  sun.position.set(Math.cos(angle) * 80 + W/2, Math.sin(angle) * 80, W/2);
+  
+  // プレイヤーを中心に太陽の位置を追従させて影の計算範囲を最適化
+  sun.position.set(Math.cos(angle) * 80 + player.pos.x, Math.sin(angle) * 80 + player.pos.y, Math.sin(angle) * 20 + player.pos.z);
+  sun.target.position.set(player.pos.x, player.pos.y, player.pos.z);
+  sun.target.updateMatrixWorld();
 
   let skyColor, sunIntensity, hemiIntensity, torchIntensity;
 
