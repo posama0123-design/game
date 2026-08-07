@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Minecraft</title>
+<title>Minecraft (Singleplayer)</title>
 <style>
   html, body { margin:0; padding:0; overflow:hidden; background:#000; height:100%; width:100%; font-family: -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", sans-serif; }
   canvas { display:block; }
@@ -33,14 +33,6 @@
     text-shadow:0 1px 3px rgba(0,0,0,0.8); line-height:1.6; user-select:none;
   }
 
-  #onlineList {
-    position:fixed; top:14px; right:14px; z-index:10; color:#fff; font-size:13px;
-    text-shadow:0 1px 3px rgba(0,0,0,0.8); text-align:right; user-select:none;
-  }
-  .onlineTitle { opacity:0.75; font-size:11px; margin-bottom:4px; }
-  .onlineRow { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin:2px 0; }
-  .onlineDot { width:9px; height:9px; border-radius:50%; display:inline-block; flex-shrink:0; }
-
   #startScreen {
     position:fixed; inset:0; background:linear-gradient(#87ceeb,#c9e8f5);
     display:flex; align-items:center; justify-content:center; flex-direction:column;
@@ -48,26 +40,15 @@
   }
   #startScreen h1 { font-size:42px; margin:0 0 8px; letter-spacing:1px; }
   #startScreen p { font-size:15px; margin:4px 0; color:#3a4a55; }
-  #nameInput {
-    margin-top:20px; padding:12px 16px; font-size:16px; border-radius:8px; border:2px solid rgba(61,90,74,0.5);
-    width:240px; text-align:center; outline:none; background:rgba(255,255,255,0.9); color:#20303d;
+  
+  #startBtn, #resetBtn {
+    margin-top:10px; padding:12px 30px; font-size:15px; border:none; border-radius:8px;
+    color:#fff; cursor:pointer; font-weight:bold;
   }
-  #nameInput:focus { border-color:#3d7a3d; }
-  #nameError {
-    color:#a8321f; font-size:13px; margin-top:8px; height:16px; visibility:hidden;
-  }
-  #nameError.show { visibility:visible; }
-  #startBtn {
-    margin-top:10px; padding:14px 36px; font-size:16px; border:none; border-radius:8px;
-    background:#3d7a3d; color:#fff; cursor:pointer; box-shadow:0 3px 0 #2a552a;
-  }
+  #startBtn { background:#3d7a3d; box-shadow:0 3px 0 #2a552a; }
   #startBtn:active { transform:translateY(2px); box-shadow:0 1px 0 #2a552a; }
-  #controlsBox {
-    margin-top:26px; background:rgba(255,255,255,0.5); padding:14px 22px; border-radius:10px;
-    font-size:13px; text-align:left;
-  }
-  #controlsBox div { margin:3px 0; }
-  #controlsBox b { display:inline-block; width:120px; }
+  #resetBtn { background:#a8321f; box-shadow:0 3px 0 #722215; margin-top:8px; font-size:12px; opacity:0.8; }
+  #resetBtn:hover { opacity:1; }
 
   #paused {
     position:fixed; inset:0; background:rgba(0,0,0,0.45); display:none;
@@ -79,36 +60,26 @@
 
 <div id="startScreen">
   <h1>Minecraft</h1>
-  <p>マルチ対応バージョン</p>
-  <input id="nameInput" type="text" maxlength="10" placeholder="名前を入力(10文字まで)" autocomplete="off">
-  <div id="nameError">名前を入力してください</div>
-  <button id="startBtn">プレイ開始</button>
-  <div id="controlsBox">
-    <div><b>ルール1</b>荒らしをしないでください。</div>
-    <div><b>ルール2</b>いじめをしないでください</div>
-    <div><b>ルール3</b>マップを遊べなくするほど破壊しないでください</div>
-    <div><b>ルール4</b> 楽しく遊びましょう</div>
-    <div><b>ルール5</b> 人を殴りません</div>
-    <div><b>ルール6</b> 違反はすべて許しません</div>
-  </div>
+  <p>シングルプレイ専用 (自動保存対応)</p>
+  <button id="startBtn">ワールドに入る</button>
+  <button id="resetBtn">ワールドをリセット</button>
 </div>
 
 <div id="crosshair"></div>
 <div id="hotbar"></div>
 <div id="hud"></div>
-<div id="onlineList"></div>
+<div id="paused">一時停止中</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.15.0/firebase-app-compat.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.15.0/firebase-database-compat.min.js"></script>
 <script>
 (function(){
 
 // ---------- Config ----------
-const W = 480;         // world width/depth (10倍に拡大)
+const W = 480;         // world width/depth
 const H = 34;          // world height
 const WATER_LEVEL = 12;
 const CHUNK_SEED = 20260711;
+const SAVE_KEY = "mc_singleplayer_world_v1";
 
 // Block types
 const AIR=0, GRASS=1, DIRT=2, STONE=3, SAND=4, WATER=5, WOOD=6, LEAVES=7, SNOW=8, TORCH=9;
@@ -136,11 +107,10 @@ BASE_COLOR[DIRT]  = [1,1,1]; BASE_COLOR[STONE] = [1,1,1]; BASE_COLOR[SAND]  = [1
 BASE_COLOR[WOOD]  = [1,1,1]; BASE_COLOR[LEAVES]= [1,1,1]; BASE_COLOR[SNOW]  = [1,1,1];
 BASE_COLOR[WATER] = [0.20,0.42,0.62]; BASE_COLOR[TORCH] = [1,1,1];
 
-// ---------- Synced Time System Variables ----------
+// ---------- Time System Variables ----------
 let gameTime = 8.0; 
 const DAY_REAL_DURATION = 600;  
 const NIGHT_REAL_DURATION = 420; 
-const TOTAL_CYCLE_DURATION = DAY_REAL_DURATION + NIGHT_REAL_DURATION;
 
 // ---------- Generated Torch Texture ----------
 let torchCanvasDataUrl = "";
@@ -205,43 +175,6 @@ const wMat = new THREE.MeshLambertMaterial({
   vertexColors: true, map: waterTexture, transparent: true, opacity: 0.65, side: THREE.DoubleSide 
 });
 
-const steveTexture = textureLoader.load('steve.png');
-steveTexture.magFilter = THREE.NearestFilter; steveTexture.minFilter = THREE.NearestFilter;
-
-// ---------- Firebase Setup ----------
-const firebaseConfig = {
-  apiKey:wrtnrwersehnse
-  authDomain: rgresnhstednhetsdgh
-  databaseURL:nestuhnesxhgfnsetthsmjsrjsrteyw 
-  projectId:34263636334634 
-  storageBucket:waentaewfdnweea 
-  messagingSenderId:3645634764364363
-  appId: 34643634643643
-  measurementId: wazedngesdzgn43645rwezt
-};
-const ROOM = "main";
-const blocksPath = "rooms/" + ROOM + "/blocks";
-const playersPath = "rooms/" + ROOM + "/players";
-const timePath = "rooms/" + ROOM + "/time"; 
-
-let fbReady = false, db = null, playerRef = null, myId = null;
-let playerName = "", myColor = "#ffffff";
-try {
-  if (typeof firebase !== "undefined") {
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.database();
-    fbReady = true;
-  }
-} catch (err) {
-  console.warn("Firebaseへの接続に失敗しました。ローカル時間で実行します。", err);
-  fbReady = false;
-}
-
-function colorForId(id){
-  let h = 0; for (let i=0;i<id.length;i++) h = (h*31 + id.charCodeAt(i)) >>> 0;
-  return "hsl(" + (h % 360) + ", 65%, 55%)";
-}
-
 // ---------- Noise & World Storage ----------
 function hash2(x, z) {
   let n = Math.sin(x*127.1 + z*311.7 + CHUNK_SEED*0.001) * 43758.5453123;
@@ -272,11 +205,41 @@ function inBounds(x,y,z){ return x>=0 && x<W && y>=0 && y<H && z>=0 && z<W; }
 function getBlock(x,y,z){ if(!inBounds(x,y,z)) return AIR; return world[idx(x,y,z)]; }
 function setBlock(x,y,z,v){ if(!inBounds(x,y,z)) return; world[idx(x,y,z)] = v; }
 
+function saveWorldToStorage() {
+  try {
+    let binaryStr = "";
+    for (let i = 0; i < world.length; i++) {
+      binaryStr += String.fromCharCode(world[i]);
+    }
+    localStorage.setItem(SAVE_KEY, btoa(binaryStr));
+  } catch (e) {
+    console.warn("ワールドの保存に失敗しました:", e);
+  }
+}
+
+function loadWorldFromStorage() {
+  const savedData = localStorage.getItem(SAVE_KEY);
+  if (!savedData) return false;
+  try {
+    const binaryStr = atob(savedData);
+    if (binaryStr.length !== world.length) return false;
+    for (let i = 0; i < binaryStr.length; i++) {
+      world[i] = binaryStr.charCodeAt(i);
+    }
+    return true;
+  } catch (e) {
+    console.warn("セーブデータの読み込みに失敗しました:", e);
+    return false;
+  }
+}
+
 function generateWorld() {
+  if (loadWorldFromStorage()) return;
+
   const heightMap = new Int16Array(W*W);
   for (let x=0;x<W;x++) {
     for (let z=0;z<W;z++) {
-      const n = fbm(x*0.015, z*0.015, 4); // マップ拡大に合わせたノイズスケール
+      const n = fbm(x*0.015, z*0.015, 4);
       const h = Math.floor(9 + n*20);
       heightMap[x+z*W] = h;
       for (let y=0; y<H; y++) {
@@ -310,7 +273,7 @@ function generateWorld() {
       }
     }
   }
-  return heightMap;
+  saveWorldToStorage();
 }
 generateWorld();
 
@@ -347,7 +310,7 @@ function updateTorchLightsInScene() {
   }
 }
 
-// 雲 (Clouds) の描画 (リピート数を増やして小さく細かく調整)
+// 雲
 const cloudTexture = textureLoader.load('clouds.png');
 cloudTexture.wrapS = THREE.RepeatWrapping; cloudTexture.wrapT = THREE.RepeatWrapping;
 cloudTexture.magFilter = THREE.NearestFilter; cloudTexture.minFilter = THREE.NearestFilter;
@@ -521,21 +484,25 @@ function updatePlayer(dt){
 }
 
 // ---------- Pointer Lock & Initializer ----------
-const canvas = renderer.domElement, startScreen = document.getElementById('startScreen');
-const pausedEl = document.getElementById('paused'), startBtn = document.getElementById('startBtn');
-const nameInput = document.getElementById('nameInput'), nameError = document.getElementById('nameError');
+const canvas = renderer.domElement;
+const startScreen = document.getElementById('startScreen');
+const pausedEl = document.getElementById('paused');
+const startBtn = document.getElementById('startBtn');
+const resetBtn = document.getElementById('resetBtn');
 
-nameInput.addEventListener('keydown', e=>{ if (e.key === 'Enter') startBtn.click(); });
 let gameStarted = false;
 
 startBtn.addEventListener('click', ()=>{
-  const name = nameInput.value.trim().slice(0,10);
-  if (!name) { nameError.classList.add('show'); nameInput.focus(); return; }
-  nameError.classList.remove('show'); playerName = name;
-  myId = 'p_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36);
-  myColor = colorForId(myId); updateOnlineListUI({}); joinMultiplayer();
   gameStarted = true; startScreen.style.display = 'none'; canvas.requestPointerLock();
 });
+
+resetBtn.addEventListener('click', ()=>{
+  if (confirm("ワールドを完全に初期化しますか？（変更は失われます）")) {
+    localStorage.removeItem(SAVE_KEY);
+    location.reload();
+  }
+});
+
 canvas.addEventListener('click', ()=>{ if (!document.pointerLockElement && gameStarted) canvas.requestPointerLock(); });
 document.addEventListener('pointerlockchange', ()=>{
   const locked = document.pointerLockElement === canvas;
@@ -571,161 +538,24 @@ function raycastVoxel(maxDist){
 canvas.addEventListener('mousedown', e=>{
   if (document.pointerLockElement !== canvas) return;
   const hit = raycastVoxel(7); if (!hit) return;
-  if (e.button === 0) { setBlock(hit.x, hit.y, hit.z, AIR); dirty = true; pushBlockEdit(hit.x, hit.y, hit.z, AIR); } 
+  if (e.button === 0) { 
+    setBlock(hit.x, hit.y, hit.z, AIR); 
+    dirty = true; 
+    saveWorldToStorage();
+  } 
   else if (e.button === 2) {
     const px = hit.x+hit.normal[0], py = hit.y+hit.normal[1], pz = hit.z+hit.normal[2];
     if (HOTBAR_BLOCKS[selected] === TORCH || (px<Math.floor(player.pos.x-0.3)||px>Math.floor(player.pos.x+0.3)||py<Math.floor(player.pos.y)||py>Math.floor(player.pos.y+player.height)||pz<Math.floor(player.pos.z-0.3)||pz>Math.floor(player.pos.z+0.3))) {
-      const block = HOTBAR_BLOCKS[selected]; setBlock(px,py,pz, block); dirty = true; pushBlockEdit(px,py,pz, block);
+      const block = HOTBAR_BLOCKS[selected]; 
+      setBlock(px,py,pz, block); 
+      dirty = true; 
+      saveWorldToStorage();
     }
   }
 });
 canvas.addEventListener('contextmenu', e=> e.preventDefault());
 
-// ---------- Multiplayer Sync Engine (Firebase) ----------
-function pushBlockEdit(x,y,z,val){
-  if (!fbReady || !db) return;
-  db.ref(blocksPath + '/' + x + '_' + y + '_' + z).set(val).catch(()=>{});
-}
-function onBlockEdit(snap){
-  const parts = snap.key.split('_').map(Number);
-  if (parts.length === 3) { setBlock(parts[0], parts[1], parts[2], snap.val()); dirty = true; }
-}
-
-function joinMultiplayer(){
-  if (!fbReady || !db) {
-    document.getElementById('onlineList').innerHTML = '<div class="onlineTitle">オフラインプレイ</div>';
-    return;
-  }
-  
-  db.ref(timePath).on('value', snap => {
-    if (snap.exists()) { gameTime = snap.val(); }
-  });
-
-  playerRef = db.ref(playersPath + '/' + myId);
-  playerRef.onDisconnect().remove();
-  playerRef.set({ name: playerName, color: myColor, x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch, ts: Date.now() });
-
-  db.ref(playersPath).on('value', snap=>{ updateRemotePlayers(snap.val() || {}); });
-  db.ref(blocksPath).once('value').then(snap=>{
-    const val = snap.val() || {};
-    for (const k in val) { const p = k.split('_').map(Number); if (p.length === 3) setBlock(p[0], p[1], p[2], val[k]); }
-    dirty = true;
-    db.ref(blocksPath).on('child_added', onBlockEdit); db.ref(blocksPath).on('child_changed', onBlockEdit);
-  });
-}
-
-function applySteveUVs(geo) {
-  const computeUV = (x1, y1, x2, y2) => [x1/256, 1-(y2/256), x2/256, 1-(y1/256)];
-
-  const headUVs = {
-    right:  computeUV(0,  32, 32, 64),
-    front:  computeUV(32, 32, 64, 64),
-    left:   computeUV(64, 32, 96, 64),
-    back:   computeUV(96, 32, 128,64),
-    top:    computeUV(32, 0,  64, 32),
-    bottom: computeUV(64, 0,  96, 32)
-  };
-
-  const bodyUVs = {
-    right:  computeUV(64,  128, 80,  192),
-    front:  computeUV(80,  128, 112, 192),
-    left:   computeUV(112, 128, 128, 192),
-    back:   computeUV(128, 128, 160, 192),
-    top:    computeUV(80,  96,  112, 128),
-    bottom: computeUV(112, 96,  148, 128)
-  };
-
-  const setFaceUVs = (array, faceIndex, coords) => {
-    const idx = faceIndex * 8;
-    array[idx]   = coords[0]; array[idx+1] = coords[1]; 
-    array[idx+2] = coords[2]; array[idx+3] = coords[1]; 
-    array[idx+4] = coords[0]; array[idx+5] = coords[3]; 
-    array[idx+6] = coords[2]; array[idx+7] = coords[3]; 
-  };
-
-  const uvs = new Float32Array(48);
-  const target = (geo.parameters.height === 0.5) ? headUVs : bodyUVs;
-  
-  setFaceUVs(uvs, 0, target.right);
-  setFaceUVs(uvs, 1, target.left);
-  setFaceUVs(uvs, 2, target.top);
-  setFaceUVs(uvs, 3, target.bottom);
-  setFaceUVs(uvs, 4, target.front);
-  setFaceUVs(uvs, 5, target.back);
-
-  geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-}
-
-const remotePlayers = {};
-function makeNameSprite(name){
-  const cnv = document.createElement('canvas'); cnv.width = 256; cnv.height = 64;
-  const ctx = cnv.getContext('2d'); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0,0,256,64);
-  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(String(name), 128, 32);
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:new THREE.CanvasTexture(cnv), depthTest:false }));
-  sprite.scale.set(1.6,0.4,1); sprite.position.set(0, 2.15, 0); return sprite;
-}
-
-function makeAvatar(name, colorCss){
-  const group = new THREE.Group();
-  const steveMat = new THREE.MeshLambertMaterial({ map: steveTexture, transparent: true, side: THREE.DoubleSide });
-  
-  const bodyGeo = new THREE.BoxGeometry(0.5, 1.2, 0.35);
-  applySteveUVs(bodyGeo);
-  const body = new THREE.Mesh(bodyGeo, steveMat); body.position.y = 0.6; group.add(body);
-  
-  const headGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-  applySteveUVs(headGeo);
-  const head = new THREE.Mesh(headGeo, steveMat); head.position.y = 1.45; group.add(head);
-  
-  group.add(makeNameSprite(name));
-  return group;
-}
-
-function updateRemotePlayers(playersVal){
-  const seen = new Set();
-  for (const id in playersVal) {
-    if (id === myId) continue;
-    const p = playersVal[id]; if (!p) continue;
-    seen.add(id); let rp = remotePlayers[id];
-    if (!rp) {
-      const group = makeAvatar(p.name || '???', p.color || colorForId(id)); scene.add(group);
-      rp = remotePlayers[id] = { group, target: {x:p.x||0,y:p.y||0,z:p.z||0,yaw:p.yaw||0} };
-      group.position.set(rp.target.x, rp.target.y, rp.target.z);
-    }
-    rp.target.x = p.x||0; rp.target.y = p.y||0; rp.target.z = p.z||0; rp.target.yaw = p.yaw||0;
-  }
-  for (const id in remotePlayers) {
-    if (!seen.has(id)) { scene.remove(remotePlayers[id].group); delete remotePlayers[id]; }
-  }
-  updateOnlineListUI(playersVal);
-}
-
-function tickRemotePlayers(dt){
-  const t = Math.min(1, dt*12);
-  for (const id in remotePlayers) {
-    const rp = remotePlayers[id]; const g = rp.group, tg = rp.target;
-    g.position.x += (tg.x - g.position.x) * t; g.position.y += (tg.y - g.position.y) * t; g.position.z += (tg.z - g.position.z) * t;
-    let dy = tg.yaw - g.rotation.y;
-    while (dy > Math.PI) dy -= Math.PI*2; while (dy < -Math.PI) dy += Math.PI*2;
-    g.rotation.y += dy * t;
-  }
-}
-
-function updateOnlineListUI(playersVal){
-  const el = document.getElementById('onlineList'); el.innerHTML = '';
-  const title = document.createElement('div'); title.className = 'onlineTitle'; title.textContent = 'オンライン'; el.appendChild(title);
-  function addRow(name, color){
-    const row = document.createElement('div'); row.className = 'onlineRow';
-    const dot = document.createElement('span'); dot.className = 'onlineDot'; dot.style.background = color;
-    const label = document.createElement('span'); label.textContent = String(name);
-    row.appendChild(label); row.appendChild(dot); el.appendChild(row);
-  }
-  addRow(playerName + ' (自分)', myColor);
-  for (const id in playersVal) { if (id !== myId && playersVal[id]) addRow(playersVal[id].name || '???', playersVal[id].color || colorForId(id)); }
-}
-
-// ---------- Hotbar UI Synced with Real Textures ----------
+// ---------- Hotbar UI ----------
 const hotbarEl = document.getElementById('hotbar');
 function updateHotbarUI(){
   hotbarEl.innerHTML = '';
@@ -754,25 +584,11 @@ function updateHud(fps){
 }
 
 function advanceGameTime(dt) {
-  if (fbReady && db && playerRef) {
-    db.ref(timePath).transaction(currentValue => {
-      let t = (currentValue === null) ? 8.0 : currentValue;
-      const isDay = (t >= 4.0 && t < 20.0);
-      const gameHoursToPass = isDay ? 16 : 8;
-      const realSecondsMax = isDay ? DAY_REAL_DURATION : NIGHT_REAL_DURATION;
-      
-      const increment = (gameHoursToPass / realSecondsMax) * dt;
-      t += increment;
-      if (t >= 24.0) t -= 24.0;
-      return t;
-    });
-  } else {
-    const isDay = (gameTime >= 4.0 && gameTime < 20.0);
-    const gameHoursToPass = isDay ? 16 : 8;
-    const realSecondsMax = isDay ? DAY_REAL_DURATION : NIGHT_REAL_DURATION;
-    gameTime += (gameHoursToPass / realSecondsMax) * dt;
-    if (gameTime >= 24.0) gameTime -= 24.0;
-  }
+  const isDay = (gameTime >= 4.0 && gameTime < 20.0);
+  const gameHoursToPass = isDay ? 16 : 8;
+  const realSecondsMax = isDay ? DAY_REAL_DURATION : NIGHT_REAL_DURATION;
+  gameTime += (gameHoursToPass / realSecondsMax) * dt;
+  if (gameTime >= 24.0) gameTime -= 24.0;
 }
 
 function updateEnvironmentByTime() {
@@ -815,7 +631,7 @@ window.addEventListener('resize', ()=>{
 });
 
 // ---------- Main Engine Loop ----------
-let lastTime = performance.now(), frameCount = 0, fpsTimer = 0, fps = 0, lastNetSend = 0;
+let lastTime = performance.now(), frameCount = 0, fpsTimer = 0, fps = 0;
 
 function animate(now){
   requestAnimationFrame(animate);
@@ -828,12 +644,7 @@ function animate(now){
 
   if (document.pointerLockElement === canvas) {
     updatePlayer(dt);
-    if (fbReady && playerRef && now - lastNetSend > 90) {
-      lastNetSend = now;
-      playerRef.update({ x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch, ts: Date.now() }).catch(()=>{});
-    }
   }
-  tickRemotePlayers(dt);
   if (dirty) { buildMeshes(); dirty = false; }
 
   frameCount++; fpsTimer += dt;
@@ -843,7 +654,6 @@ function animate(now){
 }
 requestAnimationFrame(animate);
 
-window.addEventListener('beforeunload', ()=>{ if (playerRef) try{playerRef.remove();}catch(e){} });
 })();
 </script>
 </body>
